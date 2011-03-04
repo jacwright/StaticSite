@@ -7,62 +7,77 @@
 </head>
 <body class="login">
 <h1>
-	<a href="http://staticsite.com/" title="Powered by Static Site">Example Site</a>
+	<a href="http://staticsite.org/" title="Powered by Static Site">Example Site</a>
 </h1>
 <p class="message">
 	
 </p>
-<form id="loginform" name="loginform" class="login">
-	<h3>Sign In</h3>
-	<p>
-		<label>
-			User Name<br>
-			<input type="text" class="text" name="email">
-		</label>
-	</p>
-	<p>
-		<label>
-			Password<br>
-			<input type="password" class="text" name="password">
-		</label>
-	</p>
-</form>
-<p class="nav login">
-	<a href="#" class="register-new">Register</a> |
-	<a href="#" class="forgot-password">Forgot Password?</a>
-</p>
-<form id="registerform" name="registerform" class="register">
-	<h3>Register</h3>
-	<p>
-		<label>
-			Amazon Access Key ID<br>
-			<input type="text" class="text" name="key">
-		</label>
-	</p>
-	<p>
-		<label>
-			Secret Access Key<br>
-			<input type="password" class="text" name="secret">
-		</label>
-	</p>
-	<p>
-		<label>
-			User Name<br>
-			<input type="text" class="text" name="email">
-		</label>
-	</p>
-	<p>
-		<label>
-			Password<br>
-			<input type="password" class="text" name="password">
-		</label>
-	</p>
-	<p class="submit">
-		<a href="#" class="sign-in">Cancel</a>
-		<button type="submit">Register</button>
-	</p>
-</form>
-<script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.5.1/jquery.min.js"></script>
-<script type="text/javascript" src="js/admin.js"></script>
+<div class="pages">
+	<div>
+		<form id="loginform" name="loginform" class="login">
+			<h3>Sign In</h3>
+			<p>
+				<label>
+					User Name<br>
+					<input type="text" class="text" name="email">
+				</label>
+			</p>
+			<p>
+				<label>
+					Password<br>
+					<input type="password" class="text" name="password">
+				</label>
+			</p>
+			<p class="submit">
+				<button type="submit">Sign In</button>
+			</p>
+		</form>
+		<p class="nav login">
+			<a href="#/login/register" class="register-new">Register</a> or
+			<a href="#/login/forgot-password" class="forgot-password">Forgot Password?</a>
+		</p>
+	</div>
+	<div class="register">
+		<form id="registerform" name="registerform" class="register">
+			<h3>Register</h3>
+			<p>
+				<label>
+					Amazon Access Key ID<br>
+					<input type="text" class="text" name="key">
+				</label>
+			</p>
+			<p>
+				<label>
+					Secret Access Key<br>
+					<input type="password" class="text" name="secret">
+				</label>
+			</p>
+			<p>
+				<label>
+					User Name<br>
+					<input type="text" class="text" name="email">
+				</label>
+			</p>
+			<p>
+				<label>
+					Password<br>
+					<input type="password" class="text" name="password">
+				</label>
+			</p>
+			<p class="submit">
+				<a href="#/login" class="sign-in">Cancel</a>
+				<button type="submit">Register</button>
+			</p>
+		</form>
+	</div>
+	<div class="forgot-password">
+		<h3>Forgot Password</h3>
+		<p>We cannot retrieve passwords. You may re-register with the same username.</p>
+		<p class="submit">
+			<a href="#/login" class="sign-in">Sign In</a>
+			<a href="#/login/register" class="btn">Register</a>
+		</p>
+	</div>
+</div>
 </body>
 </html>

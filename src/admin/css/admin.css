@@ -1,7 +1,9 @@
 body {
 	font: 14px arial;
 }
-
+a {
+	color: #049;
+}
 body.login {
 	background-color: #f3f3f3;
 }
@@ -16,10 +18,13 @@ body.login form p {
 	margin: 0 0 10px;
 }
 body.login input.text {
-	display: block;
+	width: 294px;
 	font-size: 18px;
 }
-#loginform, #registerform {
+body.login p {
+	clear: right;
+}
+body.login .pages > * {
 	width: 300px;
 	margin: auto;
 	background-color: #fff;
@@ -40,12 +45,6 @@ body.login p.nav {
 	width: 300px;
 	margin: 10px auto;
 }
-body.login .register {
-	display: none;
-}
-body.register .register {
-	display: block;
-}
-body.register .login {
+.hidden {
 	display: none;
 }

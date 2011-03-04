@@ -38,17 +38,18 @@ function Class(def, statics) {
 	// add implement first so definition can override it
 	if (implement instanceof Array) {
 		for (var i = 0, l = implement.length; i < l; i++) {
-			Object.defineProperties(constructor.prototype, implement[i].prototype);
+			copy(constructor.prototype, implement[i].prototype);
 		}
 	} else if (implement) {
-		Object.defineProperties(constructor.prototype, implement[i].prototype);
+		copy(constructor.prototype, implement[i].prototype);
 	}
 	
 	// Copy the properties over onto the new prototype
-	constructor.prototype = Object.create(extend, def);
+	constructor.prototype = Object.create(extend.prototype);
+	copy(constructor.prototype, def);
 	
 	if (statics) {
-		Object.defineProperties(constructor, statics);
+		copy(constructor, statics);
 	}
 	
 	return constructor;
@@ -68,6 +69,15 @@ Class.convert = function(obj, type) {
 	return obj;
 };
 
+function copy(target, source) {
+	for (var i in source) {
+		if (source.hasOwnProperty(i)) {
+			target[i] = source[i];
+		}
+	}
+}
+
 if (typeof exports !== 'undefined') {
 	exports.Class = Class;
+	exports.copy = copy;
 }

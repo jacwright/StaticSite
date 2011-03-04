@@ -9,7 +9,7 @@
 	
 	window.require = function require(moduleId) {
 		loadModuleSync(moduleId);
-		return getModule(moduleId);
+		return getModule(moduleId).exports;
 	};
 	
 	
@@ -22,7 +22,7 @@
 	};
 	
 	require.run = function(moduleId) {
-		if (moduleClosures.hasOwnProperty(moduleId)) return getModule(moduleId);
+		if (moduleClosures.hasOwnProperty(moduleId)) return getModule(moduleId).exports;
 		else loadModule(main = moduleId, '');
 	};
 	
@@ -44,7 +44,7 @@
 			exports: { extend: extend }
 		};
 		modules[moduleId] = module;
-		moduleClosures[moduleId](createRequire(moduleId), module.exports, module);
+		moduleClosures[moduleId].call(window, createRequire(moduleId), module.exports, module);
 		return module;
 	}
 	
