@@ -2,58 +2,67 @@
 <html>
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-<title>{{site.title}}</title>
+<title>Example Site</title>
 <link type="text/css" rel="stylesheet" href="css/admin.css" media="all">
-<script type="text/javascript" src="js/admin.js"></script>
 </head>
 <body class="login">
 <h1>
-	<a href="http://www.layeredsites.com/" title="Powered by Layered Sites">{{site.title}}</a>
+	<a href="http://staticsite.com/" title="Powered by Static Site">Example Site</a>
 </h1>
 <p class="message">
 	
 </p>
-<form id="loginform" name="loginform">
+<form id="loginform" name="loginform" class="login">
+	<h3>Sign In</h3>
 	<p>
 		<label>
-			Email<br>
-			<input type="text" name="email">
+			User Name<br>
+			<input type="text" class="text" name="email">
 		</label>
 	</p>
 	<p>
 		<label>
 			Password<br>
-			<input type="password" name="password">
+			<input type="password" class="text" name="password">
 		</label>
 	</p>
 </form>
-<hr>
-<form id="registerform" name="registerform">
-	<p>Register</p>
+<p class="nav login">
+	<a href="#" class="register-new">Register</a> |
+	<a href="#" class="forgot-password">Forgot Password?</a>
+</p>
+<form id="registerform" name="registerform" class="register">
+	<h3>Register</h3>
 	<p>
 		<label>
 			Amazon Access Key ID<br>
-			<input type="text" name="key">
+			<input type="text" class="text" name="key">
 		</label>
 	</p>
 	<p>
 		<label>
 			Secret Access Key<br>
-			<input type="password" name="secret">
+			<input type="password" class="text" name="secret">
 		</label>
 	</p>
 	<p>
 		<label>
-			Email<br>
-			<input type="text" name="email">
+			User Name<br>
+			<input type="text" class="text" name="email">
 		</label>
 	</p>
 	<p>
 		<label>
 			Password<br>
-			<input type="password" name="password">
+			<input type="password" class="text" name="password">
 		</label>
 	</p>
+	<p class="submit">
+		<a href="#" class="sign-in">Cancel</a>
+		<button type="submit">Register</button>
+	</p>
 </form>
+<script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.5.1/jquery.min.js"></script>
+<script type="text/javascript" src="js/admin.js"></script>
 </body>
 </html>

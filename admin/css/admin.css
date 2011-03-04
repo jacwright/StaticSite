@@ -1,0 +1,51 @@
+body {
+	font: 14px arial;
+}
+
+body.login {
+	background-color: #f3f3f3;
+}
+body.login h1 {
+	width: 300px;
+	margin: 160px auto 20px;
+}
+body.login form h3 {
+	margin: 0 0 10px;
+}
+body.login form p {
+	margin: 0 0 10px;
+}
+body.login input.text {
+	display: block;
+	font-size: 18px;
+}
+#loginform, #registerform {
+	width: 300px;
+	margin: auto;
+	background-color: #fff;
+	padding: 20px;
+	overflow: hidden;
+	
+	border-radius: 16px;
+	-webkit-border-radius: 16px;
+	-moz-border-radius: 16px;
+	box-shadow: 0 0 26px #999;
+	-webkit-box-shadow: 0 0 26px #ccc;
+	-moz-shadow: 0 0 26px #999;
+}
+body.login p.submit {
+	float: right;
+}
+body.login p.nav {
+	width: 300px;
+	margin: 10px auto;
+}
+body.login .register {
+	display: none;
+}
+body.register .register {
+	display: block;
+}
+body.register .login {
+	display: none;
+}
