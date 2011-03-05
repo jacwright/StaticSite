@@ -185,14 +185,24 @@ function loadModule(moduleId, currentModuleId, pathIndex) {
 		combined += 'require.addModuleClosure("' + moduleId + '", function(require, exports, module) {\n' + code + '\n});\n\n';
 		
 		// if finished loading all dependencies finish combine and minimize it
-		if (!--loading && main) {
-			combined += 'require.run("' + main + '");';
-			finish(combined);
+		if (!--loading) {
+			console.log('done:', main, !!modules[main]);
+			if (main && !modules[main]) {
+				loadMain();
+			} else {
+				if (main) combined += 'require.run("' + main + '");';
+				finish(combined);
+			}
 		}
 	});
 }
 
 function loadFile(file) {
+	// don't work on directories
+	if (!/\.js\^?$/.test(file)) {
+		return;
+	}
+	
 	var order = loading++;
 	files[order] = false;
 	var exempt = false;
@@ -235,7 +245,8 @@ function loadFile(file) {
 		}
 		
 		if (!--loading) {
-			if (main) loadMain();
+			console.log('done2:', main, !!modules[main]);
+			if (main && !modules[main]) loadMain();
 			else finish(combined);
 		}
 	});

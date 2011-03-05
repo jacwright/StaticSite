@@ -3,7 +3,7 @@ var Class = require('class').Class,
 	Backbone = require('backbone');
 
 
-var Pages = exports.Pages = new Class({
+var Pages = new Class({
 	extend: View,
 	
 	templateName: '{name}.html',
@@ -12,12 +12,30 @@ var Pages = exports.Pages = new Class({
 		this.el = $(element);
 		this.$('> *').hide();
 		this.pages = {};
+		this.titles = {};
 		if (pages) {
 			for (var name in pages) {
 				if (!pages.hasOwnProperty(name)) continue;
 				this.pages[name] = $(pages[name]);
 			}
 		}
+	},
+	
+	at: function(page) {
+		var pages = page.split('/'),
+			basepage = pages.shift(),
+			subpage = pages.shift();
+		
+		if (this.pages.hasOwnProperty(basepage) && (basepage = this.pages[basepage]).filter(':visible').length) {
+			if (!subpage || basepage.find('.pages > .' + subpage + ':visible').length) {
+				return true;
+			}
+		}
+		return false;
+	},
+	
+	go: function(page) {
+		location.hash = '#/' + page;
 	},
 	
 	/**
@@ -54,27 +72,37 @@ var Pages = exports.Pages = new Class({
 		return $.get(url).then(function(result) {
 			var bod = result.indexOf('<body');
 			if (bod !== -1) {
+				var title = (result.match(/<title>([^<]+)<\/title>/) || {1: 'Static Site CMS'})[1];
 				var bodStart = result.indexOf('>', bod) + 1;
 				var bodEnd = result.lastIndexOf('</body>');
+				self.titles[name] = title;
 				result = result.slice(bodStart, bodEnd);
 			}
 			result = result.replace(/<script.+?<\/script>/g, '');
 			page.html(result).removeClass('loading').hide().find('.pages > :not(:first-child)').hide();
 			self.trigger('load', name, page);
-			require('pages/' + name);
+			
+			try {
+				require('pages/' + name);
+			} catch(e) {}
 			return page;
 		});
 	},
 	
 	_open: function(name, data) {
-		var pages = name.split('/');
-		var basePage = pages.shift(), subPage = pages.shift();
-		var page = this.pages[basePage], sub = subPage ? page.find('.pages > .' + subPage) : page.find('.pages > :first');
+		var pages = name.split('/'), self = this;
+		var basepage = pages.shift(), subPage = pages.shift();
+		var page = this.pages[basepage], sub = subPage ? page.find('.pages > .' + subPage) : page.find('.pages > :first');
+		if (this.titles.hasOwnProperty(basepage)) document.title = this.titles[basepage];
 		var baseOpened = false;
 		
 		if (!page.filter(':visible').length) {
+			page.siblings(':visible').hide().trigger('hide').each(function() {
+				self.trigger('close', $(this));
+			});
+			
 			page.show().trigger('show', [data]);
-			this.trigger('open', basePage, page);
+			this.trigger('open', basepage, page);
 			baseOpened = true;
 		}
 		
@@ -90,7 +118,7 @@ var Pages = exports.Pages = new Class({
 
 
 
-var pages = exports.pages = new Pages('#pages');
+var pages = module.exports = new Pages('#pages');
 pages.bind('open', function(name) {
 	$('body').attr('class', name.split('/').shift());
 });

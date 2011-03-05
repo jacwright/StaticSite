@@ -20,7 +20,47 @@ Promise.prototype = {
 	then: function(fulfilledHandler, failedHandler, progressHandler) {
 		throw new TypeError('The Promise base class is abstract, this function must be implemented by the Promise implementation');
 	},
-
+	
+	/**
+	 * Specific method for only passing a fulfilled handler.
+	 * 
+	 * @param handler
+	 */
+	fulfilled: function(handler) {
+		return this.then(handler);
+	},
+	
+	/**
+	 * Specific method for only passing a failed handler.
+	 * 
+	 * @param handler
+	 */
+	failed: function(handler) {
+		return this.then(null, handler);
+	},
+	
+	/**
+	 * Specific method for only passing a progress handler.
+	 * 
+	 * @param handler
+	 */
+	progress: function(handler) {
+		return this.then(null, null, handler);
+	},
+	
+	/**
+	 * Apply the promise's result array to the handler optionally providing a context. 
+	 * 
+	 * @param handler Fulfilled handler
+	 * @param [context] Optional context object
+	 */
+	apply: function(handler, context) {
+		return this.then(function(result) {
+			if (result instanceof Array) return handler.apply(context, result);
+			else return handler.call(context, result);
+		});
+	},
+	
 	/**
 	 * Allows the cancellation of a promise. Some promises are cancelable and so this method may be created on
 	 * subclasses of Promise to allow a consumer of the promise to cancel it.
@@ -122,7 +162,6 @@ Promise.prototype = {
  */
 function when(obj) {
 	var deferred = new Deferred();
-	if (arguments.length <= 1) return deferred.fulfill(obj).promise;
 	
 	var args = Array.prototype.slice.call(arguments),
 		count = args.length,
@@ -239,7 +278,7 @@ function notify(handler) {
 	
 	// pass along the error/result
 	if (!method) {
-		deferred[this.status].apply(null, results);
+		deferred[this.status.slice(0, -2)].apply(null, results);
 		return;
 	}
 	

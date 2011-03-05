@@ -1,11 +1,27 @@
-// combined version of the admin code
+var data = require('data'),
+	pages = require('pages');
 
-$('body.login a.forgot-password').click(function(event) {
+$('#loginform').submit(function(event) {
 	event.preventDefault();
-	alert('We cannot retrieve passwords. You may re-register with the same username.');
+	var form = $(this);
+	data.login(form.find('input[name=username]').val(), form.find('input[name=password]').val())
+		.then(function() {
+			pages.go('dashboard');
+		}, function() {
+			alert('Username or password incorrect');
+		});
 });
 
-$('body.login a.register-new, body.login a.sign-in').click(function(event) {
+$('#registerform').submit(function(event) {
 	event.preventDefault();
-	$('body').toggleClass('register');
+	var form = $(this);
+	data.register(form.find('input[name=key]').val(),
+			form.find('input[name=secret]').val(),
+			form.find('input[name=username]').val(),
+			form.find('input[name=password]').val())
+		.then(function() {
+			pages.go('dashboard');
+		}, function() {
+			alert('Key or secret incorrect');
+		});
 });

@@ -72,7 +72,11 @@
 				loading.splice(i, 1);
 				if (xhr.status == 200) {
 					var code = xhr.responseText;
-					moduleClosures[moduleId] = new Function('require', 'exports', 'module', code);
+					try {
+						moduleClosures[moduleId] = new Function('require', 'exports', 'module', code);
+					} catch(e) {
+						throw new e.constructor(e.message + ' in module:' + moduleId);
+					}
 					findRequired(code, moduleId);
 					
 					// if finished loading all dependencies start the run

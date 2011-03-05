@@ -1,7 +1,7 @@
 var cookie = {
 	set: function(name, value, expires, path, secure) {
 		document.cookie = name + '=' + encodeURI(value) +
-        ((expires) ? '; expires=' + expires.toGMTString() : '') +
+        ((expires) ? '; expires=' + (typeof expires == 'number' ? new Date(expires) : expires).toGMTString() : '') +
 		((path) ? '; path=' + path : '; path=/') + 
 		((secure) ? '; secure' : '');
 	},
