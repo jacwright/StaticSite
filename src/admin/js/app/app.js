@@ -11,7 +11,7 @@ if (location.protocol != 'https:' || location.host != 's3.amazonaws.com') {
 }
 
 if (!pages.at('login')) {
-	data.auth().fail(function() {
+	data.auth().failed(function() {
 		location.hash = '#/login';
 	});
 }

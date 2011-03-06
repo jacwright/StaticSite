@@ -1,9 +1,9 @@
 Static Site is a content management system hosted on Amazon's S3 and administered from S3 through a Javascript client.
 It includes security and hopefully will provide many features other traditional content management systems provide.
 
-*Still under development. Right now the most you can do is register your user account and later sign in.*
+**Still under development. Right now the most you can do is register your user account and later sign in.**
 
-*Getting Started*
+**Getting Started**
 
 _There could be a simple service to do all this for you, but until then you have to handle it manually._
 
@@ -36,20 +36,27 @@ From the "Website" tab you'll see the S3 domain you must use to have the website
 "mywebsite.com" you can point your mywebsite.com domain's DNS to this S3 domain using CNAME to access your S3 website
 from http://mywebsite.com/.
 
-Finally upload the following files from the src/ folder of your cloned git project to your S3 bucket:
-index.html
-error.html
-admin/index.html
-admin/css/admin.css
-admin/js/admin.js
-admin/login.html
-admin/dashboard.html
+Finally upload the following files from the src/ folder of your cloned git project to your S3 bucket (set their
+content-type appropriately, e.g. text/html, text/css, text/js):
+
+* index.html
+* error.html
+* admin/index.html
+* admin/css/admin.css
+* admin/js/admin.js
+* admin/login.html
+* admin/dashboard.html
 
 You should be able to go to the url https://s3.amazonaws.com/mybucket/admin/index.html and be presented with the login
 page. Click Register and put in your info, then you'll be taken to the blank dashboard page. Later you can come here
-and login with the username/password you registered with.
+and login with the username/password you registered with. Note that because Amazon only allows GETs for the website URL
+you cannot login to the admin from the same URL you access the website from.
 
-*Building*
+You can see [staticsite.org](http://staticsite.org/) set up with the code and if you go to
+[staticsite.org/admin](http://staticsite.org/admin/) you'll be redirected to the correct URL for logging in, though you
+won't be able to register with that bucket.
+
+**Building**
 
 To build the admin.js you need node.js installed, npm, and uglify-js installed. You can get instructions on installing
 node.js from their [website](http://nodejs.org/), npm from their [website](http://npmjs.org/), and uglify by calling

@@ -3728,7 +3728,9 @@ var s3 = exports.s3 = {
 			url: url,
 			headers: headers,
 			data: data
-		})).failed(function(xhr) {
+		})).then(function(array) {
+			return array[0];
+		}, function(xhr) {
 			var xml = $(xhr.responseText);
 			if (xml.find('code').text() == 'SignatureDoesNotMatch') {
 				console.error('Signature does not match, expected:\n', xml.find('StringToSign').text().replace(/\n/g, '\\n'), '\nactual:\n', stringToSign.replace(/\n/g, '\\n'));
@@ -3755,7 +3757,7 @@ var Bucket = new Class({
 		if (folder) {
 			(options.params || (options.params = {})).prefix = folder;
 		}
-		return s3.load(options).apply(xmlToObj.bind(null, ['contents']));
+		return s3.load(options).then(xmlToObj.bind(null, ['contents']));
 	},
 	
 	get: function(url, options) {
@@ -8959,7 +8961,7 @@ if (location.protocol != 'https:' || location.host != 's3.amazonaws.com') {
 }
 
 if (!pages.at('login')) {
-	data.auth().fail(function() {
+	data.auth().failed(function() {
 		location.hash = '#/login';
 	});
 }
