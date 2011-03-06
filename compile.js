@@ -166,13 +166,17 @@ function finish(text) {
 
 function loadModule(moduleId, currentModuleId, pathIndex) {
 	moduleId = resolveModuleId(moduleId, currentModuleId);
-	if (modules.hasOwnProperty(moduleId)) return;
+	var status = modules[moduleId];
 	
-	pathIndex = pathIndex || 0;
+	if (status === true || status == (pathIndex || 0)) return;
+	
+	console.log('loading module:', moduleId);
+	
+	modules[moduleId] = pathIndex = pathIndex || 0;
 	var file = paths[pathIndex] + moduleId + '.js';
 	++loading;
 	
-	fs.readFile(file, "utf8", function(err, code){
+	fs.readFile(file, "utf8", function(err, code) {
 		if (err) {
 			if (++pathIndex == paths.length) throw new Error('No module "' + moduleId + '" exists in paths [' + paths.join(', ') + ']');
 			--loading;
@@ -186,7 +190,6 @@ function loadModule(moduleId, currentModuleId, pathIndex) {
 		
 		// if finished loading all dependencies finish combine and minimize it
 		if (!--loading) {
-			console.log('done:', main, !!modules[main]);
 			if (main && !modules[main]) {
 				loadMain();
 			} else {
