@@ -3063,10 +3063,6 @@ if (typeof exports !== 'undefined') {
 }
 });
 
-require.addModuleClosure("transport", function(require, exports, module) {
-var S3 = require('s3').S3;
-});
-
 require.addModuleClosure("backbone", function(require, exports, module) {
 //     Backbone.js 0.3.3
 //     (c) 2010 Jeremy Ashkenas, DocumentCloud Inc.
@@ -4154,6 +4150,10 @@ require.addModuleClosure("backbone", function(require, exports, module) {
 
 }).call(this);
 
+});
+
+require.addModuleClosure("transport", function(require, exports, module) {
+var S3 = require('s3').S3;
 });
 
 require.addModuleClosure("underscore", function(require, exports, module) {

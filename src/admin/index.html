@@ -3,6 +3,7 @@
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 <title>Static Site Admin</title>
+<link type="text/css" rel="stylesheet" href="https://ajax.googleapis.com/ajax/libs/jqueryui/1.8.10/themes/smoothness/jquery-ui.css" media="all">
 <link type="text/css" rel="stylesheet" href="css/admin.css" media="all">
 <link rel="icon" type="image/png" href="staticlogo.png">
 </head>
@@ -12,7 +13,7 @@
 		Example Site
 	</div>
 	<div class="utility">
-		<a href="#/logout">Sign off</a>
+		<a href="#/logout">Sign out</a>
 	</div>
 </div>
 <div id="nav">
@@ -23,12 +24,14 @@
 </div>
 <div id="footer">
 	<div class="progress">
-		Saving...
+		<span class="msg">Saving</span>
 	</div>
 	<div class="poweredby">
 		<span>Powered by</span> <a href="http://staticsite.org"><span>Static Site</span></a>
 	</div>
 </div>
+<script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.5.1/jquery.min.js"></script>
+<script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.8.10/jquery-ui.min.js"></script>
 <script type="text/javascript" src="js/admin.js"></script>
 </body>
 </html>
