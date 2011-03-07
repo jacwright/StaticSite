@@ -8,7 +8,8 @@ var transport = require('transport'),
 
 
 var bucket,
-	bucketName = location.pathname.replace(/^\/([^\/]+).*/, '$1');
+	bucketName = location.pathname.replace(/^\/([^\/]+).*/, '$1'),
+	path = '/' + bucketName + '/admin/';
 
 
 var data = exports.extend({
@@ -31,10 +32,14 @@ var data = exports.extend({
 	},
 	
 	auth: function() {
+		var session = cookie.get('session');
 		var remember = cookie.get('rememberme');
-		if (remember) {
-			remember.split(':');
+		if (remember && remember != 'true') {
+			remember = remember.split(':');
 			return this.login(remember[0], remember[1], true, true);
+		} else if (session) {
+			session = session.split(':');
+			return this.login(session[0], session[1], false, true);
 		}
 		return new Deferred().fail().promise;
 	},
@@ -46,8 +51,13 @@ var data = exports.extend({
 			password = sha1(password);
 		}
 		if (remember) {
-			cookie.set('rememberme', username + ':' + password, new Date().getTime() + 86400000 * 30, '/admin/', true); // 30 days
+			cookie.set('rememberme', username + ':' + password, thirtyDays(), path, true);
+		} else {
+			cookie.remove('rememberme', path);
 		}
+		
+		cookie.set('session', username + ':' + password, null, path, true); // browser session only
+		
 		$.get('../api/auth/' + username).then(function(cypher) {
 			var values = aes.decrypt(cypher, password, 256).split(':');
 			
@@ -69,8 +79,12 @@ var data = exports.extend({
 	},
 	
 	logout: function() {
-		cookie.remove('rememberme');
-		s3 = null;
+		if (cookie.get('rememberme')) {
+			// remove their rememberme, but set the preference to remember
+			cookie.set('rememberme', 'true', thirtyDays(), path, true);
+		}
+		cookie.remove('session', path);
+		s3.auth(null, null);
 	},
 	
 	register: function(key, secret, username, password) {
@@ -103,3 +117,7 @@ var data = exports.extend({
 	}
 	
 });
+
+function thirtyDays() {
+	return new Date().getTime() + 86400000 * 30;
+}

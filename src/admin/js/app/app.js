@@ -1,18 +1,18 @@
-var Cookie = require('cookie'),
-	Backbone = require('backbone'),
+var cookie = require('cookie'),
 	data = require('data'),
-	pages = require('pages');
+	screens = require('screens');
 
 
 // ensure we are at the correct domain
 if (location.protocol != 'https:' || location.host != 's3.amazonaws.com') {
 	location.href = 'https://s3.amazonaws.com/' + location.host + location.pathname + (location.pathname.slice(0, 1) == '/' ? 'index.html' : '');
-	return;
+	throw new Error('Cannot administer site from this location.');
 }
 
-if (!pages.at('login')) {
-	data.auth().failed(function() {
-		location.hash = '#/login';
+if (!screens.at('login')) {
+	data.auth().then(function() {
+		if (!location.hash) screens.go('dashboard');
+	}, function() {
+		screens.go('login');
 	});
 }
-

@@ -1,9 +1,10 @@
-var cookie = {
+
+var cookie = exports.extend({
 	set: function(name, value, expires, path, secure) {
 		document.cookie = name + '=' + encodeURI(value) +
-        ((expires) ? '; expires=' + (typeof expires == 'number' ? new Date(expires) : expires).toGMTString() : '') +
-		((path) ? '; path=' + path : '; path=/') + 
-		((secure) ? '; secure' : '');
+        ((expires) ? ';expires=' + (typeof expires == 'number' ? new Date(expires) : expires).toGMTString() : '') +
+		((path) ? ';path=' + path : ';path=/') + 
+		((secure) ? ';secure' : '');
 	},
 	
 	get: function(name) {
@@ -11,8 +12,8 @@ var cookie = {
 		return cookies[name];
 	},
 	
-	remove: function(name) {
-		cookie.set(name, '', new Date(0));
+	remove: function(name, path) {
+		cookie.set(name, '', new Date(0), path);
 	},
 	
 	open: function() {
@@ -24,8 +25,4 @@ var cookie = {
 		}
 		return cookies;
 	}
-};
-
-if (typeof module !== 'undefined') {
-	module.exports = cookie;
-}
+});

@@ -59,7 +59,7 @@ won't be able to register with that bucket.
 **Building**
 
 To build the admin.js you need node.js installed, npm, and uglify-js installed. You can get instructions on installing
-node.js from their [website](http://nodejs.org/), npm from their [website](http://npmjs.org/), and uglify by calling
+[node.js](http://nodejs.org/) from their website, [npm](http://npmjs.org/) from their website, and uglify by calling
 "npm install uglify-js" from the command line.
 
 Once everything is installed go to the root of your project and run `./make.sh`

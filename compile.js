@@ -145,7 +145,6 @@ var reqOrExpRegex = /\brequire\(("|')(.+?)\1\)|\bexports.+=/;
 
 function finish(text) {
 	if (combine) {
-		console.log('loaded...', '(' + (new Date().getTime() - time) + 'ms)');
 		time = new Date().getTime();
 		
 		fs.writeFile(combine, text, function (err) {
@@ -169,8 +168,6 @@ function loadModule(moduleId, currentModuleId, pathIndex) {
 	var status = modules[moduleId];
 	
 	if (status === true || status == (pathIndex || 0)) return;
-	
-	console.log('loading module:', moduleId);
 	
 	modules[moduleId] = pathIndex = pathIndex || 0;
 	var file = paths[pathIndex] + moduleId + '.js';
@@ -248,7 +245,6 @@ function loadFile(file) {
 		}
 		
 		if (!--loading) {
-			console.log('done2:', main, !!modules[main]);
 			if (main && !modules[main]) loadMain();
 			else finish(combined);
 		}

@@ -1,30 +1,97 @@
+html, body {
+	height: 100%;
+}
 body {
-	font: 14px arial;
+	margin: 0;
+	font: 14px "Helvetica Neue", Helvetica, "Segoe UI", Tahoma, Arial, sans-serif;
+	background-color: #f3f3f3;
+}
+body.loading > * {
+	display: none;
 }
 a {
 	color: #049;
 }
-body.login {
-	background-color: #f3f3f3;
+
+
+.hidden {
+	display: none;
 }
-body.login h1 {
+
+
+#header {
+	height: 30px;
+	background-color: #eee;
+	border-bottom: 1px solid #ccc;
+	padding: 4px 20px;
+}
+#header .logo {
+	float: left;
+	line-height: 30px;
+	font-size: 16px;
+	font-weight: bold;
+}
+#header .utility {
+	float: right;
+	line-height: 30px;
+}
+#screens {
+}
+#footer {
+	position: fixed;
+	bottom: 0;
+	left: 0;
+	right: 0;
+	line-height: 20px;
+	font-size: 11px;
+	height: 20px;
+	padding: 2px 20px;
+	background-color: #eee;
+	border-top: 1px solid #ccc;
+}
+#footer .progress {
+	float: left;
+}
+#footer .poweredby {
+	float: right;
+}
+#footer .poweredby span {
+	float: left;
+}
+#footer .poweredby a {
+	float: left;
+	margin-left: 6px;
+	width: 76px;
+	height: 20px;
+	background: transparent url(../img/logo.png) no-repeat center center;
+}
+#footer .poweredby a span {
+	display: none;
+}
+body.login #header, body.login #nav {
+	display: none;
+}
+#login {
+	padding-top: 100px;
+}
+#login h1 {
 	width: 300px;
-	margin: 160px auto 20px;
+	margin: 20px auto;
 }
-body.login form h3 {
+#login form h3 {
 	margin: 0 0 10px;
 }
-body.login form p {
+#login form p {
 	margin: 0 0 10px;
 }
-body.login input.text {
+#login input.text {
 	width: 294px;
 	font-size: 18px;
 }
-body.login p {
+#login p {
 	clear: right;
 }
-body.login .pages > * {
+#login .screens > * {
 	width: 300px;
 	margin: auto;
 	background-color: #fff;
@@ -38,13 +105,14 @@ body.login .pages > * {
 	-webkit-box-shadow: 0 0 26px #ccc;
 	-moz-shadow: 0 0 26px #999;
 }
-body.login p.submit {
+#login p.submit {
 	float: right;
 }
-body.login p.nav {
+#login p.nav {
 	width: 300px;
 	margin: 10px auto;
 }
-.hidden {
-	display: none;
+
+#dashboard {
+	padding: 20px;
 }

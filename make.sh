@@ -11,7 +11,7 @@
 	src/admin/js/libs/jquery-1.5.1.min.js^ \
 	src/admin/js/libs/require.js^ \
 	src/admin/js/libs/date.js^ \
-	src/admin/js/app/pages/*
+	src/admin/js/app/screens/*
 
 
 ./compile.js -nc \
