@@ -1,8 +1,8 @@
 #!/bin/sh
 
 ./compile.js -nc \
-	--combine src/admin/js/admin.js \
-	--compile src/admin/js/admin.min.js \
+	--combine src/admin/js/compiled/admin.js \
+	--compile src/admin/js/compiled/admin.min.js \
 	--path src/admin/js/libs \
 	--path src/admin/js/app \
 	--force-commonjs \
@@ -15,8 +15,8 @@
 
 
 ./compile.js -nc \
-	--combine src/admin/js/plugins.js \
-	--compile src/admin/js/plugins.min.js \
-	--path src/admin/js/plugins \
+	--combine src/admin/js/compiled/plugins.js \
+	--compile src/admin/js/compiled/plugins.min.js \
+	--path src/admin/js \
 	--force-commonjs \
 	src/admin/js/plugins/*

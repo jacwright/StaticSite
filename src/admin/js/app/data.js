@@ -3,6 +3,7 @@ var transport = require('transport'),
 	sha1 = require('crypto').sha1,
 	aes = require('crypto').aes,
 	when = require('promise').when,
+	Backbone = require('backbone');
 	Deferred = require('promise').Deferred,
 	s3 = require('s3').s3;
 
@@ -12,8 +13,9 @@ var bucket,
 	path = '/' + bucketName + '/admin/';
 
 
-var data = exports.extend({
+var data = exports.extend(Backbone.Events, {
 	
+	collections: {},
 	
 	get: function(url, params) {
 		
@@ -29,6 +31,65 @@ var data = exports.extend({
 	
 	destory: function(url, params) {
 		
+	},
+	
+	refresh: function(options) {
+		var deferred = new Deferred();
+		var promise = deferred.promise;
+		
+		bucket.list('api/').then(function(results) {
+			var urlExp = /^api\/(\w+)\/(\w+)$/;
+			var has = {};
+			
+			
+			results.contents.forEach(function(item) {
+				var match = item.key.match(urlExp);
+				if (!match) return;
+				try {
+					var id = match[2];
+					var type = match[1];
+					var collection = data.collections[type];
+					if (!has[type]) has[type] = {};
+				} catch(e) {
+					return;
+				}
+				
+				has[type][id] = true;
+				
+				// if we have it and it is up-to-date, don't load it.
+				if (collection.get(id) && collection.get(id).etag == item.etag) return;
+				
+				// queue up all the calls so that the final promise won't be done until all of these are.
+				promise = promise.then(bucket.get(item.key).then(function(data) {
+					data = JSON.parse(data);
+					data.id = id; // just in case it hadn't been set
+					if (collection.get(id)) {
+						collection.get(id).set(data, options).etag = item.etag;
+					} else {
+						collection.add(data, options).get(id).etag = item.etag;
+					}
+				}, function(error) {
+					console.error(error);
+				}));
+			});
+			
+			// remove deleted items
+			for (var type in has) {
+				var remove = [];
+				var ids = has[type];
+				var collection = data.collections[type];
+				collection.each(function(item) {
+					if (!ids[item.id]) remove.push(item);
+				});
+				collection.remove(remove, options);
+			}
+			
+		}, deferred.fail);
+		
+		// return the data object as the promise result from this call
+		return promise.then(function() {
+			return data;
+		});
 	},
 	
 	auth: function() {
@@ -66,6 +127,7 @@ var data = exports.extend({
 				bucket = s3.bucket(bucketName);
 				bucket.list('api/auth/' + username).then(function() {
 					deferred.fulfill();
+					data.trigger('login');
 				}, function(error) {
 					deferred.fail(error);
 				});
@@ -85,6 +147,7 @@ var data = exports.extend({
 		}
 		cookie.remove('session', path);
 		s3.auth(null, null);
+		data.trigger('logout');
 	},
 	
 	register: function(key, secret, username, password) {

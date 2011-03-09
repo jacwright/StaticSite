@@ -137,9 +137,12 @@
 	}
 	
 	function extend(source) {
-		for (var i in source) {
-			if (source.hasOwnProperty(i)) {
-				this[i] = source[i];
+		for (var i = 0; i < arguments.length; i++) {
+			source = arguments[i];
+			for (var prop in source) {
+				if (source.hasOwnProperty(prop)) {
+					this[prop] = source[prop];
+				}
 			}
 		}
 		return this;
