@@ -2,6 +2,7 @@ var transport = require('transport'),
 	cookie = require('cookie'),
 	sha1 = require('crypto').sha1,
 	aes = require('crypto').aes,
+	uuid = require('crypto').uuid,
 	when = require('promise').when,
 	Backbone = require('backbone');
 	Deferred = require('promise').Deferred,
@@ -17,20 +18,16 @@ var data = exports.extend(Backbone.Events, {
 	
 	collections: {},
 	
-	get: function(url, params) {
-		
+	get: function(url) {
+		return bucket.get('api/' + url);
 	},
 	
-	put: function(url, body, params) {
-		
+	put: function(url, data) {
+		return bucket.put('api/' + url, data);
 	},
 	
-	post: function(url, body, params) {
-		
-	},
-	
-	destory: function(url, params) {
-		
+	destory: function(url) {
+		return bucket.destory('api/' + url);
 	},
 	
 	refresh: function(options) {

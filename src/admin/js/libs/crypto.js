@@ -970,7 +970,14 @@ function b64_md5_digest(str) {
 	}
 	return Base64.encode(digest);
 }
- 
+
+
+function uuid() {
+	return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+		var r = Math.random()*16|0, v = c == 'x' ? r : (r&0x3|0x8);
+		return v.toString(16);
+	});
+}
 
 
 if (typeof exports !== 'undefined') {
@@ -978,7 +985,6 @@ if (typeof exports !== 'undefined') {
 	exports.sha1 = Sha1.hash;
 	exports.base64 = Base64;
 	exports.utf8 = Utf8;
-	
 	exports.hex_sha1 = hex_sha1;
 	exports.b64_sha1 = b64_sha1;
 	exports.str_sha1 = str_sha1;
@@ -987,4 +993,5 @@ if (typeof exports !== 'undefined') {
 	exports.str_hmac_sha1 = str_hmac_sha1;
 	exports.md5 = calcMD5;
 	exports.b64_md5_digest = b64_md5_digest;
+	exports.uuid = uuid;
 }
