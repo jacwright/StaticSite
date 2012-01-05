@@ -1,12 +1,12 @@
-var Class = require('class').Class,
-	b64_md5_digest = require('crypto').b64_md5_digest,
-	utf8 = require('crypto').utf8,
-	b64_hmac_sha1 = require('crypto').b64_hmac_sha1,
-	when = require('promise').when,
+var crypto = require('./crypto'),
+	date = require('./date'),
+	b64_md5_digest = crypto.b64_md5_digest,
+	utf8 = crypto.utf8,
+	b64_hmac_sha1 = crypto.b64_hmac_sha1,
+	promises = require('./promises'),
 	_ = require('underscore')._;
 
 
-var url = location.protocol + '//' + location.hostname + location.pathname.replace(/^(\/[^\/]+).*/, '$1');
 var key;
 var secret;
 
@@ -96,14 +96,14 @@ var s3 = exports.s3 = {
 			headers['Authorization'] = 'AWS ' + key + ':' + signature;
 		}
 		
-		return when($.ajax({
+		return promises.convert($.ajax({
 			type: method,
 			url: url,
 			headers: headers,
 			data: data
-		})).then(function(array) {
-			return array[0];
-		}, function(xhr) {
+		})).fulfilled(function() {
+			console.log(arguments);
+		}).failed(function(xhr) {
 			var xml = $(xhr.responseText);
 			if (xml.find('code').text() == 'SignatureDoesNotMatch') {
 				console.error('Signature does not match, expected:\n', xml.find('StringToSign').text().replace(/\n/g, '\\n'), '\nactual:\n', stringToSign.replace(/\n/g, '\\n'));
@@ -114,12 +114,13 @@ var s3 = exports.s3 = {
 };
 
 
-var Bucket = new Class({
-	
-	constructor: function(name) {
-		this.name = name;
-		this.url = '/' + name + '/';
-	},
+function Bucket(name) {
+	this.name = name;
+	this.url = '/' + name + '/';
+}
+
+Bucket.prototype = {
+	constructor: Bucket,
 	
 	list: function(folder, options) {
 		url = this.url;
@@ -160,7 +161,7 @@ var Bucket = new Class({
 		});
 		return s3.load(options);
 	}
-});
+};
 
 
 function addQueryParams(url, params) {
@@ -262,7 +263,7 @@ var types = [
 			return new Date(Date.UTC(match[1], parseInt(match[2]) + 1, match[3], match[4], match[5], match[6], match[7]));
 		}
 	}
-]
+];
 
 
 var mimeTypes = exports.mimeTypes = {

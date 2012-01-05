@@ -1,0 +1,16 @@
+{
+	"name": "StaticSite",
+	"description": "An HTML5 CMS designed to be served and hosted from Amazon S3",
+	"version": "0.0.1",
+	"author": "Jacob Wright",
+	"engines": {
+		"node": ">= 0.4.5"
+	},
+	"dependencies": {
+		"browserify": "1.8.3",
+		"backbone": "0.5.3",
+		"underscore": "1.2.4",
+        "stitch": "0.3.3",
+		"uglify-js": "1.2.3"
+	}
+}

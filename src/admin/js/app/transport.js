@@ -1,1 +1,0 @@
-var S3 = require('s3').S3;

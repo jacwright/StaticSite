@@ -39,40 +39,61 @@ html, body {
 	-moz-border-radius: 0 0 6px 6px;
 	border-radius: 0 0 6px 6px;
 }
-.other-actions {
-	float: right;
-	margin-top: 10px;
-}
 </style>
-<script type="text/javascript" src="js/jquery.js"></script>
-<script type="text/javascript" src="js/login.js"></script>
+<script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.5.1/jquery.js"></script>
 <script type="text/javascript">
-require('/login');
+$(function() {
+	$('#alerts').hide();
+	$('#key').focus();
+	$('#registerform').submit(function(event) {
+		event.preventDefault();
+		$('#alerts').slideDown('fast');
+	});
+	$('#registerform').keyup(function(event) {
+		if (event.which === 27) location.href = $('a.cancel').attr('href');
+	});
+	$('#alerts .close').click(function(event) {
+		event.preventDefault();
+		$('#alerts').slideUp('fast');
+		$('#key').focus();
+	});
+});
 </script>
 </head>
 <body>
 <div class="container">
 	<div class="content">
 		<div class="page-header">
-			<h1>Example Site <small>Please sign in to continue</small></h1>
+			<h1>Example Site <small>Registration is required</small></h1>
 		</div>
-		<div id="alerts" class="alert-message block-message error">
+		<div id="alerts" class="alert-message block-message error" data-alert="alert">
 			<a class="close" href="#">×</a>
 			<p><strong>There was an error signing in.</strong></p>
 			<ul>
-				<li class="msg"></li>
+				<li>Duis mollis est non commodo luctus</li>
+				<li>Nisi erat porttitor ligula</li>
+				<li>Eget lacinia odio sem nec elit</li>
 			</ul>
 		</div>
 		
-		<div id="forgot" class="alert-message block-message info">
-			<a class="close" href="#">×</a>
-			<p><strong>Forgot Password</strong></p>
-			<p>We cannot retrieve passwords. You must re-register with the same username.</p>
-		</div>
-		
-		<form id="loginform" name="loginform" class="login">
+		<form id="registerform" name="loginform" class="login">
 			<fieldset>
-				<legend>Sign In</legend>
+				<legend>Register</legend>
+				<div class="clearfix">
+					<label for="key">Access Key ID</label>
+					<div class="input">
+						<input id="key" type="text" class="text" name="key">
+						<span class="help-block">
+							<a href="https://aws-portal.amazon.com/gp/aws/developer/account/index.html?action=access-key" target="_blank">Security Credentials</a> are required from Amazon's website
+						</span>
+					</div>
+				</div>
+				<div class="clearfix">
+					<label for="secret">Secret Access Key</label>
+					<div class="input">
+						<input id="secret" type="password" class="text" name="secret">
+					</div>
+				</div>
 				<div class="clearfix">
 					<label for="username">User Name</label>
 					<div class="input">
@@ -85,20 +106,9 @@ require('/login');
 						<input id="password" type="password" class="text" name="password">
 					</div>
 				</div>
-				<div class="clearfix">
-					<div class="input inputs-list">
-						<label>
-							<input id="rememberme" type="checkbox" name="rememberme"> <span>Remember me</span>
-						</label>
-					</div>
-				</div>
 				<div class="actions">
-					<button type="submit" class="btn primary">Sign In</button>
-					<a class="siteurl btn" href="#">Cancel</a>
-					<div class="other-actions">
-						<a href="register.html" class="register-new">Register</a> or
-						<a href="#" class="forgot-password">Forgot Password?</a>
-					</div>
+					<button type="submit" class="btn primary">Register</button>
+					<a href="login.html" class="btn cancel">Cancel</a>
 				</div>
 			</fieldset>
 		</form>

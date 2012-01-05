@@ -1,5 +1,5 @@
-var jsp = require("./parse-js"),
-    pro = require("./process"),
+var jsp = require("parse-js.js"),
+    pro = require("process.js"),
     slice = jsp.slice,
     member = jsp.member,
     PRECEDENCE = jsp.PRECEDENCE,

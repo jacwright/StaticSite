@@ -1,12 +1,10 @@
-var transport = require('transport'),
-	cookie = require('cookie'),
-	sha1 = require('crypto').sha1,
-	aes = require('crypto').aes,
-	uuid = require('crypto').uuid,
-	when = require('promise').when,
-	Backbone = require('backbone');
-	Deferred = require('promise').Deferred,
-	s3 = require('s3').s3;
+var crypto = require('../libs/crypto'),
+	sha1 = crypto.sha1,
+	aes = crypto.aes,
+	EventEmitter = require('events').EventEmitter,
+	promises = require('../libs/promises'),
+	_ = require('underscore'),
+	s3 = require('../libs/s3').s3;
 
 
 var bucket,
@@ -14,7 +12,7 @@ var bucket,
 	path = '/' + bucketName + '/admin/';
 
 
-var data = exports.extend(Backbone.Events, {
+var data = module.exports = _.extend(new EventEmitter, {
 	
 	collections: {},
 	
@@ -31,7 +29,7 @@ var data = exports.extend(Backbone.Events, {
 	},
 	
 	refresh: function(options) {
-		var deferred = new Deferred();
+		var deferred = new promises.Deferred();
 		var promise = deferred.promise;
 		
 		bucket.list('api/').then(function(results) {
@@ -42,14 +40,12 @@ var data = exports.extend(Backbone.Events, {
 			results.contents.forEach(function(item) {
 				var match = item.key.match(urlExp);
 				if (!match) return;
-				try {
-					var id = match[2];
-					var type = match[1];
-					var collection = data.collections[type];
-					if (!has[type]) has[type] = {};
-				} catch(e) {
-					return;
-				}
+				var id = match[2];
+				var type = match[1];
+				if (!data.collections.hasOwnProperty(type)) return;
+				
+				var collection = data.collections[type];
+				if (!has[type]) has[type] = {};
 				
 				has[type][id] = true;
 				
@@ -90,40 +86,37 @@ var data = exports.extend(Backbone.Events, {
 	},
 	
 	auth: function() {
-		var session = cookie.get('session');
-		var remember = cookie.get('rememberme');
-		if (remember && remember != 'true') {
-			remember = remember.split(':');
-			return this.login(remember[0], remember[1], true, true);
-		} else if (session) {
-			session = session.split(':');
-			return this.login(session[0], session[1], false, true);
+		// TODO remove the creds until window.unload so that JS plugins won't have access to them
+		var creds = sessionStorage.getItem('creds') || localStorage.getItem('creds');
+		if (creds) {
+			s3.auth(creds.split(':'));
+			return true;
+		} else {
+			return false;
 		}
-		return new Deferred().fail().promise;
 	},
 	
 	login: function(username, password, remember, prehashed) {
-		var deferred = new Deferred();
+		var deferred = new promises.Deferred();
 		if (!prehashed) {
 			username = sha1(username);
 			password = sha1(password);
 		}
-		if (remember) {
-			cookie.set('rememberme', username + ':' + password, thirtyDays(), path, true);
-		} else {
-			cookie.remove('rememberme', path);
-		}
-		
-		cookie.set('session', username + ':' + password, null, path, true); // browser session only
 		
 		$.get('../api/auth/' + username).then(function(cypher) {
 			var values = aes.decrypt(cypher, password, 256).split(':');
 			
 			if (values.length == 3 && values[0] == username) {
 				s3.auth(values[1], values[2]);
+				var creds = values[1] + ':' + values[2];
 				bucket = s3.bucket(bucketName);
 				bucket.list('api/auth/' + username).then(function() {
 					deferred.fulfill();
+					
+					sessionStorage.setItem('creds', creds);
+					
+					if (remember) localStorage.setItem('creds', creds);
+					
 					data.trigger('login');
 				}, function(error) {
 					deferred.fail(error);
@@ -177,7 +170,3 @@ var data = exports.extend(Backbone.Events, {
 	}
 	
 });
-
-function thirtyDays() {
-	return new Date().getTime() + 86400000 * 30;
-}

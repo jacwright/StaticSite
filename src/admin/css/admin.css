@@ -4,7 +4,7 @@ html, body {
 body {
 	margin: 0;
 	font: 14px "Helvetica Neue", Helvetica, "Segoe UI", Tahoma, Arial, sans-serif;
-	background-color: #f3f3f3;
+	position: relative;
 }
 body.loading > * {
 	display: none;
@@ -18,11 +18,21 @@ a {
 	display: none;
 }
 
-
+#wrapper {
+	height: auto;
+	min-height: 100%;
+	width: 100%;
+	box-sizing: border-box;
+	-webkit-box-sizing: border-box;
+	-moz-box-sizing: border-box;
+	padding-top: 39px;
+	padding-bottom: 35px;
+}
 #header {
+	margin-top: -39px;
 	height: 30px;
-	background-color: #eee;
-	border-bottom: 1px solid #ccc;
+	background-color: #fff;
+	border-bottom: 1px solid #c6c9ce;
 	padding: 4px 20px;
 	line-height: 30px;
 }
@@ -39,16 +49,13 @@ a {
 #screens {
 }
 #footer {
-	position: fixed;
-	bottom: 0;
-	left: 0;
-	right: 0;
-	line-height: 20px;
+	margin-top: -35px;
+	line-height: 30px;
 	font-size: 11px;
-	height: 20px;
+	height: 30px;
 	padding: 2px 10px;
-	background-color: #eee;
-	border-top: 1px solid #ccc;
+	background-color: #eaeef3;
+	border-top: 1px solid #c6c9ce;
 }
 #footer .progress {
 	float: left;
@@ -56,47 +63,47 @@ a {
 #footer .poweredby {
 	float: right;
 }
-#footer .poweredby span {
-	float: left;
-}
-#footer .poweredby a {
-	float: left;
-	margin-left: 6px;
-	width: 76px;
-	height: 20px;
-	background: transparent url(../img/logo.png) no-repeat center center;
-}
-#footer .poweredby a span {
-	display: none;
-}
 .progress {
 	padding-left: 24px;
 	background: url(../img/loader.gif) no-repeat left center;
 }
+
+.full-screen #wrapper {
+	height: 100%;
+}
+.full-screen #screens {
+	height: 100%;
+}
+.full-screen #screens > .screen {
+	height: 100%;
+	position: relative;
+}
+
+
 body.login #header, body.login #nav {
 	display: none;
 }
-#login {
+#login-screen {
 	padding-top: 100px;
 }
-#login h1 {
+#login-screen h1 {
 	width: 300px;
 	margin: 20px auto;
 }
-#login form h3 {
+#login-screen form h3 {
 	margin: 0 0 10px;
 }
-#login form p {
+#login-screen form p {
 	margin: 0 0 10px;
 }
-#login input.text {
+#login-screen input.text {
 	width: 294px;
 	font-size: 18px;
 }
-#login p {
+#login-screen p {
 	clear: right;
 }
-#login .screens > * {
+#login-screen .screens > * {
 	width: 300px;
 	margin: auto;
 	background-color: #fff;
@@ -110,14 +117,90 @@ body.login #header, body.login #nav {
 	-webkit-box-shadow: 0 0 26px #ccc;
 	-moz-shadow: 0 0 26px #999;
 }
-#login p.submit {
+#login-screen p.submit {
 	float: right;
 }
-#login p.nav {
+#login-screen p.nav {
 	width: 300px;
 	margin: 10px auto;
 }
 
-#dashboard {
-	padding: 20px;
+#dashboard-screen {
+	/*padding: 20px;*/
+}
+
+.with-sidebar {
+	background: url(../img/column.png) repeat-y left;
+}
+.with-sidebar .screen {
+	padding-left: 201px;
+}
+.sidebar {
+	float: left;
+	margin-left: -201px;
+	width: 200px;
+	text-align: right;
+	border-right: 1px solid #c6c9ce;
+}
+.sidebar h3 {
+    font-size: 1.0em;
+	margin: 25px 25px 4px 0;
+	border-bottom: 1px solid #dce0e6;
+	color: #53637d;
+	text-shadow: white 0 1px 2px;
+}
+.sidebar ul {
+	list-style: none;
+    margin: 0;
+    padding: 0;
+}
+.sidebar li a {
+	border-bottom: 1px solid transparent;
+	border-top: 1px solid transparent;
+	color: #426dc9;
+	cursor: pointer;
+	display: block;
+	font-size: 90%;
+	outline: none;
+	padding: 4px 25px 4px 0;
+	text-align: right;
+	text-shadow: white 0 1px 1px;
+}
+.sidebar li.selected a {
+	-webkit-box-shadow: 0px 1px 0px rgba(255, 255, 255, .5);
+	-moz-box-shadow: 0px 1px 0px rgba(255, 255, 255, .5);
+	background: #bbcee9 url(../img/column-selected.png) repeat-y left;
+	border-bottom: 1px solid #8faad9;
+	border-top: 1px solid #8faad9;
+	color: black;
+	text-shadow: #bbcee9 0 1px 1px;
+	text-decoration: none;
+	cursor: default;
+}
+.throbber {
+	-webkit-animation: throbber-animation 1s steps(36, end) 0 infinite;
+	background-image: url("../img/throbber.png");
+	background-position: 0;
+	display: inline-block;
+	height: 16px;
+	width: 16px;
+}
+
+@-webkit-keyframes throbber-animation {
+	from {
+		background-position-x: 0;
+	}
+	to {
+		background-position-x: -576px;
+	}
+}
+
+#pages-screen .frame {
+	width: 100%;
+	height: 100%;
+}
+#pages-screen iframe {
+	width: 100%;
+	height: 100%;
+	border: none;
 }

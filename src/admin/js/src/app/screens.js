@@ -1,5 +1,6 @@
 var Class = require('class').Class,
-	Backbone = require('backbone')
+	Backbone = require('backbone'),
+	when = require('promise').when,
 	View = Backbone.View;
 
 
@@ -64,18 +65,20 @@ var Screens = new Class({
 	 */
 	load: function(name) {
 		var url = this.templateName.replace(/\{\s*name\s*\}/g, name), self = this;
-		var screen = $('<div class="screen loading"></div>').attr('id', name).appendTo(this.el);
+		var screen = $('<div class="screen loading"></div>').attr('id', name + '-screen').appendTo(this.el);
 		self.screens[name] = screen;
 		self.trigger('created:' + name, screen);
 		self.trigger('created', name, screen);
 		
-		return $.ajax({ url: url, dataType: 'html' }).then(function(result) {
+		return when($.ajax({ url: url, dataType: 'html' })).then(function(result) {
 			var bod = result.indexOf('<body');
 			if (bod !== -1) {
 				var title = (result.match(/<title>([^<]+)<\/title>/) || {1: 'Static Site CMS'})[1];
 				var bodStart = result.indexOf('>', bod) + 1;
 				var bodEnd = result.lastIndexOf('</body>');
 				self.titles[name] = title;
+				var match = result.slice(bod, bodStart).match(/ class="([^"]+)"/);
+				if (match) screen.data('bodyClasses', match[1]);
 				result = result.slice(bodStart, bodEnd);
 			}
 			result = result.replace(/<script.+?<\/script>/g, '');
@@ -94,15 +97,23 @@ var Screens = new Class({
 	_open: function(name, data) {
 		var screens = name.split('/'), self = this;
 		var basescreen = screens.shift(), subscreen = screens.shift();
-		var screen = this.screens[basescreen], sub = subscreen ? screen.find('.screens > .' + subscreen) : screen.find('.screens > :first');
+		var screen = this.screens[basescreen], sub = subscreen ? screen.find('.screens > .' + subscreen + '-screen') : screen.find('.screens > :first');
 		if (this.titles.hasOwnProperty(basescreen)) document.title = this.titles[basescreen];
 		var baseOpened = false;
 		
 		if (!screen.filter(':visible').length) {
-			screen.siblings(':visible').hide().trigger('hide').each(function() {
-				self.trigger('close', $(this));
+			// close open screen
+			this.$('> :visible').hide().trigger('hide').each(function() {
+				var screen = $(this);
+				var name = screen.attr('id').replace('-screen', '');
+				var classes = screen.data('bodyData');
+				if (classes) $('body').removeClass(classes);
+				self.trigger('close:' + name, screen);
+				self.trigger('close', name, screen);
 			});
 			
+			var classes = screen.data('bodyClasses');
+			if (classes) $('body').addClass(classes);
 			screen.show().trigger('show', [data]);
 			this.trigger('open:' + basescreen, screen);
 			this.trigger('open', basescreen, screen);
@@ -110,8 +121,15 @@ var Screens = new Class({
 		}
 		
 		if (sub.length && (baseOpened || !sub.filter(':visible').length)) {
+			// close open screen
 			if (!sub.filter(':visible').length) {
-				sub.siblings(':visible').hide();
+				sub.siblings(':visible').hide().each(function() {
+					var screen = $(this);
+					var name = screen.attr('class').replace(/(\S+)-screen/, '$1');
+					name = screen.parent().closest('.screen').attr('id').replace('-screen', '') + '/' + name;
+					self.trigger('close:' + name, screen);
+					self.trigger('close', name, screen);
+				});
 				sub.show();
 			}
 			this.trigger('open:' + name, sub);
@@ -123,8 +141,11 @@ var Screens = new Class({
 
 
 var screens = module.exports = new Screens('#screens');
+screens.bind('close', function(name) {
+	$('body').removeClass(name.split('/').shift());
+});
 screens.bind('open', function(name) {
-	$('body').attr('class', name.split('/').shift());
+	$('body').addClass(name.split('/').shift());
 });
 
 

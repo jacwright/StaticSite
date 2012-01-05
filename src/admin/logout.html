@@ -1,1 +1,56 @@
-<h1>Signed Out</h1>
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>Sign In</title>
+<link rel="stylesheet" href="css/bootstrap.min.css">
+<style type="text/css">
+html, body {
+	background-color: #eee;
+}
+.container {
+	width: 580px; /* downsize our container to make the content feel a bit tighter and more cohesive. NOTE: this removes two full columns from the grid, meaning you only go to 14 columns and not 16. */
+}
+/* The white background content wrapper */
+.content {
+	background-color: #fff;
+	padding: 20px;
+	margin: 60px -20px 40px; /* negative indent the amount of the padding to maintain the grid system */
+	-webkit-border-radius: 6px;
+	-moz-border-radius: 6px;
+	border-radius: 6px;
+	-webkit-box-shadow: 0 1px 4px rgba(0,0,0,.15);
+	-moz-box-shadow: 0 1px 4px rgba(0,0,0,.15);
+	box-shadow: 0 1px 4px rgba(0,0,0,.15);
+}
+/* Page header tweaks */
+.page-header {
+	background-color: #f5f5f5;
+	padding: 20px 20px 10px;
+	margin: -20px -20px 20px;
+	-webkit-border-radius: 6px 6px 0 0;
+	-moz-border-radius: 6px 6px 0 0;
+	border-radius: 6px 6px 0 0;
+}
+</style>
+<script type="text/javascript" src="js/jquery.js"></script>
+<script type="text/javascript">
+sessionStorage.removeItem('creds');
+localStorage.removeItem('creds');
+$(function() {
+	var siteurl = 'http://' + location.pathname.split('/')[1] + '/';
+	$('a.siteurl').attr('href', siteurl);
+});
+</script>
+</head>
+<body>
+<div class="container">
+	<div class="content">
+		<div class="page-header">
+			<h1>Example Site <small>You are now signed out</small></h1>
+		</div>
+		<p>You have been signed out. You may <a href="login.html">sign back in</a>, or <a class="siteurl" href="#">go to the website</a>.</p>
+	</div>
+</div>
+</body>
+</html>

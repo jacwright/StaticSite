@@ -1,3 +1,175 @@
+(function() {
+	var baseUri = location.protocol + "//" + location.host;
+	var relativeUri = location.href.replace(/[^\/]*$/, '');
+	var moduleUri = relativeUri;
+	var moduleClosures = {};
+	var modules = {};
+	var loading = [];
+	var main;
+	
+	window.require = function require(moduleId) {
+		loadModuleSync(moduleId);
+		return getModule(moduleId).exports;
+	};
+	
+	
+	require.root = function(uri) {
+		if (!arguments.length) return moduleUri;
+		if (uri.slice(-1) != '/') uri += '/';
+		if (uri.charAt(0) == '/') moduleUri = baseUri + uri;
+		else if (uri.indexOf('://') == -1) moduleUri = relativeUri + uri;
+		else moduleUri = uri;
+	};
+	
+	require.run = function(moduleId) {
+		if (moduleClosures.hasOwnProperty(moduleId)) return getModule(moduleId).exports;
+		else loadModule(main = moduleId, '');
+	};
+	
+	require.addModuleClosure = function(moduleId, closure) {
+		moduleClosures[moduleId] = closure;
+	};
+	
+	
+	function getModule(moduleId) {
+		if (modules.hasOwnProperty(moduleId)) return modules[moduleId];
+		else if (moduleClosures.hasOwnProperty(moduleId)) return runModule(moduleId);
+		else throw new Error('Module "' + moduleId + '" does not exist.');
+	}
+	
+	function runModule(moduleId) {
+		var module = {
+			id: moduleId,
+			uri: moduleUri + moduleId + '.js',
+			exports: { extend: extend }
+		};
+		modules[moduleId] = module;
+		moduleClosures[moduleId].call(window, createRequire(moduleId), module.exports, module);
+		return module;
+	}
+	
+	function createRequire(currentModuleId) {
+		var require = function(moduleId) {
+			moduleId = resolveModuleId(moduleId, currentModuleId);
+			return getModule(moduleId).exports;
+		};
+		if (main) require.main = getModule(main);
+		return require;
+	}
+	
+	
+	function loadModule(moduleId, currentModuleId) {
+		moduleId = resolveModuleId(moduleId, currentModuleId);
+		if (moduleClosures.hasOwnProperty(moduleId)) return;
+		var file = moduleUri + moduleId + '.js';
+		
+		var xhr = window.XMLHttpRequest ? new XMLHttpRequest() : new ActiveXObject('Microsoft.XMLHTTP');
+		xhr.open('GET', file, true);
+		xhr.onreadystatechange = function() {
+			if (xhr.readyState === 4) {
+				var i = loading.indexOf(xhr);
+				if (i == -1) return;
+				loading.splice(i, 1);
+				if (xhr.status == 200) {
+					var code = xhr.responseText;
+					try {
+						moduleClosures[moduleId] = new Function('require', 'exports', 'module', code);
+					} catch(e) {
+						throw new e.constructor(e.message + ' in module:' + moduleId);
+					}
+					findRequired(code, moduleId);
+					
+					// if finished loading all dependencies start the run
+					if (!loading.length && main) require.run(main);
+				} else {
+					moduleError(moduleId, currentModuleId);
+				}
+			}
+		};
+
+		loading.push(xhr);
+		xhr.send(null);
+	}
+	
+	function loadModuleSync(moduleId, currentModuleId) {
+		moduleId = resolveModuleId(moduleId, currentModuleId);
+		if (moduleClosures.hasOwnProperty(moduleId)) return;
+		var file = moduleUri + moduleId + '.js';
+		
+		var xhr = window.XMLHttpRequest ? new XMLHttpRequest() : new ActiveXObject('Microsoft.XMLHTTP');
+		xhr.open('GET', file, false);
+		xhr.send(null);
+		var code = xhr.responseText;
+		moduleClosures[moduleId] = new Function('require', 'exports', 'module', code);
+		findRequired(code, moduleId, true);
+	}
+	
+	function findRequired(code, moduleId, sync) {
+		var match, requireRegex = /\brequire\(("|')(.+?)\1\)/g;
+		while (match = requireRegex.exec(code)) {
+			sync ? loadModuleSync(match[2], moduleId) : loadModule(match[2], moduleId);
+		}
+	}
+	
+	function resolveModuleId(moduleId, currentModuleId) {
+		if (moduleId.charAt(0) == '.') {
+			var path = currentModuleId.split('/');
+			var parts = moduleId.split('/');
+			path.pop();
+			if (moduleId.slice(0, 3) == '../') {
+				while (parts[0] == '..') {
+					if (!path.length) moduleError(moduleId, currentModuleId);
+					parts.shift();
+					path.pop();
+				}
+				return (path.length ? path.join('/') + '/' : '') + parts.join('/');
+			} else if (moduleId.slice(0, 2) == './') {
+				parts.shift();
+				return path.join('/') + '/' + parts.join('/');
+			}
+		}
+		return moduleId;
+	}
+	
+	function moduleError(moduleId, currentModuleId) {
+		var from = currentModuleId ? ' require()\'d from module "' + currentModuleId + '"' : '';
+		throw new Error('Could not load module "' + moduleId + '"' + from);
+	}
+	
+	function extend(source) {
+		for (var i = 0; i < arguments.length; i++) {
+			source = arguments[i];
+			for (var prop in source) {
+				if (source.hasOwnProperty(prop)) {
+					this[prop] = source[prop];
+				}
+			}
+		}
+		return this;
+	}
+	
+	function checkAutoRun() {
+		// call require.run automatically if declared in script tag
+		var scripts = document.getElementsByTagName('script');
+		var main;
+		for (var i = 0; i < scripts.length; i++) {
+			if (main = scripts[i].getAttribute('data-main')) {
+				if (scripts[i].hasAttribute('data-root')) {
+					require.root(scripts[i].getAttribute('data-root'));
+				} else {
+					var src = scripts[i].getAttribute('src');
+					require.root(src.replace(/[^\/]+$/, ''));
+				}
+				require.run(main);
+			}
+		}
+	}
+	
+	checkAutoRun();
+	
+})();
+
+
 
 /**
  * Returns a new object that has the given `obj` as its prototype.  This method
@@ -208,195 +380,6 @@ if (!Function.prototype.bind) {
 		return bound;
 	};
 })();
-
-/*!
- * jQuery JavaScript Library v1.5.1
- * http://jquery.com/
- *
- * Copyright 2011, John Resig
- * Dual licensed under the MIT or GPL Version 2 licenses.
- * http://jquery.org/license
- *
- * Includes Sizzle.js
- * http://sizzlejs.com/
- * Copyright 2011, The Dojo Foundation
- * Released under the MIT, BSD, and GPL Licenses.
- *
- * Date: Wed Feb 23 13:55:29 2011 -0500
- */
-(function(a,b){function cg(a){return d.isWindow(a)?a:a.nodeType===9?a.defaultView||a.parentWindow:!1}function cd(a){if(!bZ[a]){var b=d("<"+a+">").appendTo("body"),c=b.css("display");b.remove();if(c==="none"||c==="")c="block";bZ[a]=c}return bZ[a]}function cc(a,b){var c={};d.each(cb.concat.apply([],cb.slice(0,b)),function(){c[this]=a});return c}function bY(){try{return new a.ActiveXObject("Microsoft.XMLHTTP")}catch(b){}}function bX(){try{return new a.XMLHttpRequest}catch(b){}}function bW(){d(a).unload(function(){for(var a in bU)bU[a](0,1)})}function bQ(a,c){a.dataFilter&&(c=a.dataFilter(c,a.dataType));var e=a.dataTypes,f={},g,h,i=e.length,j,k=e[0],l,m,n,o,p;for(g=1;g<i;g++){if(g===1)for(h in a.converters)typeof h==="string"&&(f[h.toLowerCase()]=a.converters[h]);l=k,k=e[g];if(k==="*")k=l;else if(l!=="*"&&l!==k){m=l+" "+k,n=f[m]||f["* "+k];if(!n){p=b;for(o in f){j=o.split(" ");if(j[0]===l||j[0]==="*"){p=f[j[1]+" "+k];if(p){o=f[o],o===!0?n=p:p===!0&&(n=o);break}}}}!n&&!p&&d.error("No conversion from "+m.replace(" "," to ")),n!==!0&&(c=n?n(c):p(o(c)))}}return c}function bP(a,c,d){var e=a.contents,f=a.dataTypes,g=a.responseFields,h,i,j,k;for(i in g)i in d&&(c[g[i]]=d[i]);while(f[0]==="*")f.shift(),h===b&&(h=a.mimeType||c.getResponseHeader("content-type"));if(h)for(i in e)if(e[i]&&e[i].test(h)){f.unshift(i);break}if(f[0]in d)j=f[0];else{for(i in d){if(!f[0]||a.converters[i+" "+f[0]]){j=i;break}k||(k=i)}j=j||k}if(j){j!==f[0]&&f.unshift(j);return d[j]}}function bO(a,b,c,e){if(d.isArray(b)&&b.length)d.each(b,function(b,f){c||bq.test(a)?e(a,f):bO(a+"["+(typeof f==="object"||d.isArray(f)?b:"")+"]",f,c,e)});else if(c||b==null||typeof b!=="object")e(a,b);else if(d.isArray(b)||d.isEmptyObject(b))e(a,"");else for(var f in b)bO(a+"["+f+"]",b[f],c,e)}function bN(a,c,d,e,f,g){f=f||c.dataTypes[0],g=g||{},g[f]=!0;var h=a[f],i=0,j=h?h.length:0,k=a===bH,l;for(;i<j&&(k||!l);i++)l=h[i](c,d,e),typeof l==="string"&&(!k||g[l]?l=b:(c.dataTypes.unshift(l),l=bN(a,c,d,e,l,g)));(k||!l)&&!g["*"]&&(l=bN(a,c,d,e,"*",g));return l}function bM(a){return function(b,c){typeof b!=="string"&&(c=b,b="*");if(d.isFunction(c)){var e=b.toLowerCase().split(bB),f=0,g=e.length,h,i,j;for(;f<g;f++)h=e[f],j=/^\+/.test(h),j&&(h=h.substr(1)||"*"),i=a[h]=a[h]||[],i[j?"unshift":"push"](c)}}}function bo(a,b,c){var e=b==="width"?bi:bj,f=b==="width"?a.offsetWidth:a.offsetHeight;if(c==="border")return f;d.each(e,function(){c||(f-=parseFloat(d.css(a,"padding"+this))||0),c==="margin"?f+=parseFloat(d.css(a,"margin"+this))||0:f-=parseFloat(d.css(a,"border"+this+"Width"))||0});return f}function ba(a,b){b.src?d.ajax({url:b.src,async:!1,dataType:"script"}):d.globalEval(b.text||b.textContent||b.innerHTML||""),b.parentNode&&b.parentNode.removeChild(b)}function _(a){return"getElementsByTagName"in a?a.getElementsByTagName("*"):"querySelectorAll"in a?a.querySelectorAll("*"):[]}function $(a,b){if(b.nodeType===1){var c=b.nodeName.toLowerCase();b.clearAttributes(),b.mergeAttributes(a);if(c==="object")b.outerHTML=a.outerHTML;else if(c!=="input"||a.type!=="checkbox"&&a.type!=="radio"){if(c==="option")b.selected=a.defaultSelected;else if(c==="input"||c==="textarea")b.defaultValue=a.defaultValue}else a.checked&&(b.defaultChecked=b.checked=a.checked),b.value!==a.value&&(b.value=a.value);b.removeAttribute(d.expando)}}function Z(a,b){if(b.nodeType===1&&d.hasData(a)){var c=d.expando,e=d.data(a),f=d.data(b,e);if(e=e[c]){var g=e.events;f=f[c]=d.extend({},e);if(g){delete f.handle,f.events={};for(var h in g)for(var i=0,j=g[h].length;i<j;i++)d.event.add(b,h+(g[h][i].namespace?".":"")+g[h][i].namespace,g[h][i],g[h][i].data)}}}}function Y(a,b){return d.nodeName(a,"table")?a.getElementsByTagName("tbody")[0]||a.appendChild(a.ownerDocument.createElement("tbody")):a}function O(a,b,c){if(d.isFunction(b))return d.grep(a,function(a,d){var e=!!b.call(a,d,a);return e===c});if(b.nodeType)return d.grep(a,function(a,d){return a===b===c});if(typeof b==="string"){var e=d.grep(a,function(a){return a.nodeType===1});if(J.test(b))return d.filter(b,e,!c);b=d.filter(b,e)}return d.grep(a,function(a,e){return d.inArray(a,b)>=0===c})}function N(a){return!a||!a.parentNode||a.parentNode.nodeType===11}function F(a,b){return(a&&a!=="*"?a+".":"")+b.replace(r,"`").replace(s,"&")}function E(a){var b,c,e,f,g,h,i,j,k,l,m,n,o,q=[],r=[],s=d._data(this,"events");if(a.liveFired!==this&&s&&s.live&&!a.target.disabled&&(!a.button||a.type!=="click")){a.namespace&&(n=new RegExp("(^|\\.)"+a.namespace.split(".").join("\\.(?:.*\\.)?")+"(\\.|$)")),a.liveFired=this;var t=s.live.slice(0);for(i=0;i<t.length;i++)g=t[i],g.origType.replace(p,"")===a.type?r.push(g.selector):t.splice(i--,1);f=d(a.target).closest(r,a.currentTarget);for(j=0,k=f.length;j<k;j++){m=f[j];for(i=0;i<t.length;i++){g=t[i];if(m.selector===g.selector&&(!n||n.test(g.namespace))&&!m.elem.disabled){h=m.elem,e=null;if(g.preType==="mouseenter"||g.preType==="mouseleave")a.type=g.preType,e=d(a.relatedTarget).closest(g.selector)[0];(!e||e!==h)&&q.push({elem:h,handleObj:g,level:m.level})}}}for(j=0,k=q.length;j<k;j++){f=q[j];if(c&&f.level>c)break;a.currentTarget=f.elem,a.data=f.handleObj.data,a.handleObj=f.handleObj,o=f.handleObj.origHandler.apply(f.elem,arguments);if(o===!1||a.isPropagationStopped()){c=f.level,o===!1&&(b=!1);if(a.isImmediatePropagationStopped())break}}return b}}function C(a,c,e){var f=d.extend({},e[0]);f.type=a,f.originalEvent={},f.liveFired=b,d.event.handle.call(c,f),f.isDefaultPrevented()&&e[0].preventDefault()}function w(){return!0}function v(){return!1}function g(a){for(var b in a)if(b!=="toJSON")return!1;return!0}function f(a,c,f){if(f===b&&a.nodeType===1){f=a.getAttribute("data-"+c);if(typeof f==="string"){try{f=f==="true"?!0:f==="false"?!1:f==="null"?null:d.isNaN(f)?e.test(f)?d.parseJSON(f):f:parseFloat(f)}catch(g){}d.data(a,c,f)}else f=b}return f}var c=a.document,d=function(){function I(){if(!d.isReady){try{c.documentElement.doScroll("left")}catch(a){setTimeout(I,1);return}d.ready()}}var d=function(a,b){return new d.fn.init(a,b,g)},e=a.jQuery,f=a.$,g,h=/^(?:[^<]*(<[\w\W]+>)[^>]*$|#([\w\-]+)$)/,i=/\S/,j=/^\s+/,k=/\s+$/,l=/\d/,m=/^<(\w+)\s*\/?>(?:<\/\1>)?$/,n=/^[\],:{}\s]*$/,o=/\\(?:["\\\/bfnrt]|u[0-9a-fA-F]{4})/g,p=/"[^"\\\n\r]*"|true|false|null|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?/g,q=/(?:^|:|,)(?:\s*\[)+/g,r=/(webkit)[ \/]([\w.]+)/,s=/(opera)(?:.*version)?[ \/]([\w.]+)/,t=/(msie) ([\w.]+)/,u=/(mozilla)(?:.*? rv:([\w.]+))?/,v=navigator.userAgent,w,x=!1,y,z="then done fail isResolved isRejected promise".split(" "),A,B=Object.prototype.toString,C=Object.prototype.hasOwnProperty,D=Array.prototype.push,E=Array.prototype.slice,F=String.prototype.trim,G=Array.prototype.indexOf,H={};d.fn=d.prototype={constructor:d,init:function(a,e,f){var g,i,j,k;if(!a)return this;if(a.nodeType){this.context=this[0]=a,this.length=1;return this}if(a==="body"&&!e&&c.body){this.context=c,this[0]=c.body,this.selector="body",this.length=1;return this}if(typeof a==="string"){g=h.exec(a);if(!g||!g[1]&&e)return!e||e.jquery?(e||f).find(a):this.constructor(e).find(a);if(g[1]){e=e instanceof d?e[0]:e,k=e?e.ownerDocument||e:c,j=m.exec(a),j?d.isPlainObject(e)?(a=[c.createElement(j[1])],d.fn.attr.call(a,e,!0)):a=[k.createElement(j[1])]:(j=d.buildFragment([g[1]],[k]),a=(j.cacheable?d.clone(j.fragment):j.fragment).childNodes);return d.merge(this,a)}i=c.getElementById(g[2]);if(i&&i.parentNode){if(i.id!==g[2])return f.find(a);this.length=1,this[0]=i}this.context=c,this.selector=a;return this}if(d.isFunction(a))return f.ready(a);a.selector!==b&&(this.selector=a.selector,this.context=a.context);return d.makeArray(a,this)},selector:"",jquery:"1.5.1",length:0,size:function(){return this.length},toArray:function(){return E.call(this,0)},get:function(a){return a==null?this.toArray():a<0?this[this.length+a]:this[a]},pushStack:function(a,b,c){var e=this.constructor();d.isArray(a)?D.apply(e,a):d.merge(e,a),e.prevObject=this,e.context=this.context,b==="find"?e.selector=this.selector+(this.selector?" ":"")+c:b&&(e.selector=this.selector+"."+b+"("+c+")");return e},each:function(a,b){return d.each(this,a,b)},ready:function(a){d.bindReady(),y.done(a);return this},eq:function(a){return a===-1?this.slice(a):this.slice(a,+a+1)},first:function(){return this.eq(0)},last:function(){return this.eq(-1)},slice:function(){return this.pushStack(E.apply(this,arguments),"slice",E.call(arguments).join(","))},map:function(a){return this.pushStack(d.map(this,function(b,c){return a.call(b,c,b)}))},end:function(){return this.prevObject||this.constructor(null)},push:D,sort:[].sort,splice:[].splice},d.fn.init.prototype=d.fn,d.extend=d.fn.extend=function(){var a,c,e,f,g,h,i=arguments[0]||{},j=1,k=arguments.length,l=!1;typeof i==="boolean"&&(l=i,i=arguments[1]||{},j=2),typeof i!=="object"&&!d.isFunction(i)&&(i={}),k===j&&(i=this,--j);for(;j<k;j++)if((a=arguments[j])!=null)for(c in a){e=i[c],f=a[c];if(i===f)continue;l&&f&&(d.isPlainObject(f)||(g=d.isArray(f)))?(g?(g=!1,h=e&&d.isArray(e)?e:[]):h=e&&d.isPlainObject(e)?e:{},i[c]=d.extend(l,h,f)):f!==b&&(i[c]=f)}return i},d.extend({noConflict:function(b){a.$=f,b&&(a.jQuery=e);return d},isReady:!1,readyWait:1,ready:function(a){a===!0&&d.readyWait--;if(!d.readyWait||a!==!0&&!d.isReady){if(!c.body)return setTimeout(d.ready,1);d.isReady=!0;if(a!==!0&&--d.readyWait>0)return;y.resolveWith(c,[d]),d.fn.trigger&&d(c).trigger("ready").unbind("ready")}},bindReady:function(){if(!x){x=!0;if(c.readyState==="complete")return setTimeout(d.ready,1);if(c.addEventListener)c.addEventListener("DOMContentLoaded",A,!1),a.addEventListener("load",d.ready,!1);else if(c.attachEvent){c.attachEvent("onreadystatechange",A),a.attachEvent("onload",d.ready);var b=!1;try{b=a.frameElement==null}catch(e){}c.documentElement.doScroll&&b&&I()}}},isFunction:function(a){return d.type(a)==="function"},isArray:Array.isArray||function(a){return d.type(a)==="array"},isWindow:function(a){return a&&typeof a==="object"&&"setInterval"in a},isNaN:function(a){return a==null||!l.test(a)||isNaN(a)},type:function(a){return a==null?String(a):H[B.call(a)]||"object"},isPlainObject:function(a){if(!a||d.type(a)!=="object"||a.nodeType||d.isWindow(a))return!1;if(a.constructor&&!C.call(a,"constructor")&&!C.call(a.constructor.prototype,"isPrototypeOf"))return!1;var c;for(c in a){}return c===b||C.call(a,c)},isEmptyObject:function(a){for(var b in a)return!1;return!0},error:function(a){throw a},parseJSON:function(b){if(typeof b!=="string"||!b)return null;b=d.trim(b);if(n.test(b.replace(o,"@").replace(p,"]").replace(q,"")))return a.JSON&&a.JSON.parse?a.JSON.parse(b):(new Function("return "+b))();d.error("Invalid JSON: "+b)},parseXML:function(b,c,e){a.DOMParser?(e=new DOMParser,c=e.parseFromString(b,"text/xml")):(c=new ActiveXObject("Microsoft.XMLDOM"),c.async="false",c.loadXML(b)),e=c.documentElement,(!e||!e.nodeName||e.nodeName==="parsererror")&&d.error("Invalid XML: "+b);return c},noop:function(){},globalEval:function(a){if(a&&i.test(a)){var b=c.head||c.getElementsByTagName("head")[0]||c.documentElement,e=c.createElement("script");d.support.scriptEval()?e.appendChild(c.createTextNode(a)):e.text=a,b.insertBefore(e,b.firstChild),b.removeChild(e)}},nodeName:function(a,b){return a.nodeName&&a.nodeName.toUpperCase()===b.toUpperCase()},each:function(a,c,e){var f,g=0,h=a.length,i=h===b||d.isFunction(a);if(e){if(i){for(f in a)if(c.apply(a[f],e)===!1)break}else for(;g<h;)if(c.apply(a[g++],e)===!1)break}else if(i){for(f in a)if(c.call(a[f],f,a[f])===!1)break}else for(var j=a[0];g<h&&c.call(j,g,j)!==!1;j=a[++g]){}return a},trim:F?function(a){return a==null?"":F.call(a)}:function(a){return a==null?"":(a+"").replace(j,"").replace(k,"")},makeArray:function(a,b){var c=b||[];if(a!=null){var e=d.type(a);a.length==null||e==="string"||e==="function"||e==="regexp"||d.isWindow(a)?D.call(c,a):d.merge(c,a)}return c},inArray:function(a,b){if(b.indexOf)return b.indexOf(a);for(var c=0,d=b.length;c<d;c++)if(b[c]===a)return c;return-1},merge:function(a,c){var d=a.length,e=0;if(typeof c.length==="number")for(var f=c.length;e<f;e++)a[d++]=c[e];else while(c[e]!==b)a[d++]=c[e++];a.length=d;return a},grep:function(a,b,c){var d=[],e;c=!!c;for(var f=0,g=a.length;f<g;f++)e=!!b(a[f],f),c!==e&&d.push(a[f]);return d},map:function(a,b,c){var d=[],e;for(var f=0,g=a.length;f<g;f++)e=b(a[f],f,c),e!=null&&(d[d.length]=e);return d.concat.apply([],d)},guid:1,proxy:function(a,c,e){arguments.length===2&&(typeof c==="string"?(e=a,a=e[c],c=b):c&&!d.isFunction(c)&&(e=c,c=b)),!c&&a&&(c=function(){return a.apply(e||this,arguments)}),a&&(c.guid=a.guid=a.guid||c.guid||d.guid++);return c},access:function(a,c,e,f,g,h){var i=a.length;if(typeof c==="object"){for(var j in c)d.access(a,j,c[j],f,g,e);return a}if(e!==b){f=!h&&f&&d.isFunction(e);for(var k=0;k<i;k++)g(a[k],c,f?e.call(a[k],k,g(a[k],c)):e,h);return a}return i?g(a[0],c):b},now:function(){return(new Date).getTime()},_Deferred:function(){var a=[],b,c,e,f={done:function(){if(!e){var c=arguments,g,h,i,j,k;b&&(k=b,b=0);for(g=0,h=c.length;g<h;g++)i=c[g],j=d.type(i),j==="array"?f.done.apply(f,i):j==="function"&&a.push(i);k&&f.resolveWith(k[0],k[1])}return this},resolveWith:function(d,f){if(!e&&!b&&!c){c=1;try{while(a[0])a.shift().apply(d,f)}catch(g){throw g}finally{b=[d,f],c=0}}return this},resolve:function(){f.resolveWith(d.isFunction(this.promise)?this.promise():this,arguments);return this},isResolved:function(){return c||b},cancel:function(){e=1,a=[];return this}};return f},Deferred:function(a){var b=d._Deferred(),c=d._Deferred(),e;d.extend(b,{then:function(a,c){b.done(a).fail(c);return this},fail:c.done,rejectWith:c.resolveWith,reject:c.resolve,isRejected:c.isResolved,promise:function(a){if(a==null){if(e)return e;e=a={}}var c=z.length;while(c--)a[z[c]]=b[z[c]];return a}}),b.done(c.cancel).fail(b.cancel),delete b.cancel,a&&a.call(b,b);return b},when:function(a){var b=arguments.length,c=b<=1&&a&&d.isFunction(a.promise)?a:d.Deferred(),e=c.promise();if(b>1){var f=E.call(arguments,0),g=b,h=function(a){return function(b){f[a]=arguments.length>1?E.call(arguments,0):b,--g||c.resolveWith(e,f)}};while(b--)a=f[b],a&&d.isFunction(a.promise)?a.promise().then(h(b),c.reject):--g;g||c.resolveWith(e,f)}else c!==a&&c.resolve(a);return e},uaMatch:function(a){a=a.toLowerCase();var b=r.exec(a)||s.exec(a)||t.exec(a)||a.indexOf("compatible")<0&&u.exec(a)||[];return{browser:b[1]||"",version:b[2]||"0"}},sub:function(){function a(b,c){return new a.fn.init(b,c)}d.extend(!0,a,this),a.superclass=this,a.fn=a.prototype=this(),a.fn.constructor=a,a.subclass=this.subclass,a.fn.init=function b(b,c){c&&c instanceof d&&!(c instanceof a)&&(c=a(c));return d.fn.init.call(this,b,c,e)},a.fn.init.prototype=a.fn;var e=a(c);return a},browser:{}}),y=d._Deferred(),d.each("Boolean Number String Function Array Date RegExp Object".split(" "),function(a,b){H["[object "+b+"]"]=b.toLowerCase()}),w=d.uaMatch(v),w.browser&&(d.browser[w.browser]=!0,d.browser.version=w.version),d.browser.webkit&&(d.browser.safari=!0),G&&(d.inArray=function(a,b){return G.call(b,a)}),i.test(" ")&&(j=/^[\s\xA0]+/,k=/[\s\xA0]+$/),g=d(c),c.addEventListener?A=function(){c.removeEventListener("DOMContentLoaded",A,!1),d.ready()}:c.attachEvent&&(A=function(){c.readyState==="complete"&&(c.detachEvent("onreadystatechange",A),d.ready())});return d}();(function(){d.support={};var b=c.createElement("div");b.style.display="none",b.innerHTML="   <link/><table></table><a href='/a' style='color:red;float:left;opacity:.55;'>a</a><input type='checkbox'/>";var e=b.getElementsByTagName("*"),f=b.getElementsByTagName("a")[0],g=c.createElement("select"),h=g.appendChild(c.createElement("option")),i=b.getElementsByTagName("input")[0];if(e&&e.length&&f){d.support={leadingWhitespace:b.firstChild.nodeType===3,tbody:!b.getElementsByTagName("tbody").length,htmlSerialize:!!b.getElementsByTagName("link").length,style:/red/.test(f.getAttribute("style")),hrefNormalized:f.getAttribute("href")==="/a",opacity:/^0.55$/.test(f.style.opacity),cssFloat:!!f.style.cssFloat,checkOn:i.value==="on",optSelected:h.selected,deleteExpando:!0,optDisabled:!1,checkClone:!1,noCloneEvent:!0,noCloneChecked:!0,boxModel:null,inlineBlockNeedsLayout:!1,shrinkWrapBlocks:!1,reliableHiddenOffsets:!0},i.checked=!0,d.support.noCloneChecked=i.cloneNode(!0).checked,g.disabled=!0,d.support.optDisabled=!h.disabled;var j=null;d.support.scriptEval=function(){if(j===null){var b=c.documentElement,e=c.createElement("script"),f="script"+d.now();try{e.appendChild(c.createTextNode("window."+f+"=1;"))}catch(g){}b.insertBefore(e,b.firstChild),a[f]?(j=!0,delete a[f]):j=!1,b.removeChild(e),b=e=f=null}return j};try{delete b.test}catch(k){d.support.deleteExpando=!1}!b.addEventListener&&b.attachEvent&&b.fireEvent&&(b.attachEvent("onclick",function l(){d.support.noCloneEvent=!1,b.detachEvent("onclick",l)}),b.cloneNode(!0).fireEvent("onclick")),b=c.createElement("div"),b.innerHTML="<input type='radio' name='radiotest' checked='checked'/>";var m=c.createDocumentFragment();m.appendChild(b.firstChild),d.support.checkClone=m.cloneNode(!0).cloneNode(!0).lastChild.checked,d(function(){var a=c.createElement("div"),b=c.getElementsByTagName("body")[0];if(b){a.style.width=a.style.paddingLeft="1px",b.appendChild(a),d.boxModel=d.support.boxModel=a.offsetWidth===2,"zoom"in a.style&&(a.style.display="inline",a.style.zoom=1,d.support.inlineBlockNeedsLayout=a.offsetWidth===2,a.style.display="",a.innerHTML="<div style='width:4px;'></div>",d.support.shrinkWrapBlocks=a.offsetWidth!==2),a.innerHTML="<table><tr><td style='padding:0;border:0;display:none'></td><td>t</td></tr></table>";var e=a.getElementsByTagName("td");d.support.reliableHiddenOffsets=e[0].offsetHeight===0,e[0].style.display="",e[1].style.display="none",d.support.reliableHiddenOffsets=d.support.reliableHiddenOffsets&&e[0].offsetHeight===0,a.innerHTML="",b.removeChild(a).style.display="none",a=e=null}});var n=function(a){var b=c.createElement("div");a="on"+a;if(!b.attachEvent)return!0;var d=a in b;d||(b.setAttribute(a,"return;"),d=typeof b[a]==="function"),b=null;return d};d.support.submitBubbles=n("submit"),d.support.changeBubbles=n("change"),b=e=f=null}})();var e=/^(?:\{.*\}|\[.*\])$/;d.extend({cache:{},uuid:0,expando:"jQuery"+(d.fn.jquery+Math.random()).replace(/\D/g,""),noData:{embed:!0,object:"clsid:D27CDB6E-AE6D-11cf-96B8-444553540000",applet:!0},hasData:function(a){a=a.nodeType?d.cache[a[d.expando]]:a[d.expando];return!!a&&!g(a)},data:function(a,c,e,f){if(d.acceptData(a)){var g=d.expando,h=typeof c==="string",i,j=a.nodeType,k=j?d.cache:a,l=j?a[d.expando]:a[d.expando]&&d.expando;if((!l||f&&l&&!k[l][g])&&h&&e===b)return;l||(j?a[d.expando]=l=++d.uuid:l=d.expando),k[l]||(k[l]={},j||(k[l].toJSON=d.noop));if(typeof c==="object"||typeof c==="function")f?k[l][g]=d.extend(k[l][g],c):k[l]=d.extend(k[l],c);i=k[l],f&&(i[g]||(i[g]={}),i=i[g]),e!==b&&(i[c]=e);if(c==="events"&&!i[c])return i[g]&&i[g].events;return h?i[c]:i}},removeData:function(b,c,e){if(d.acceptData(b)){var f=d.expando,h=b.nodeType,i=h?d.cache:b,j=h?b[d.expando]:d.expando;if(!i[j])return;if(c){var k=e?i[j][f]:i[j];if(k){delete k[c];if(!g(k))return}}if(e){delete i[j][f];if(!g(i[j]))return}var l=i[j][f];d.support.deleteExpando||i!=a?delete i[j]:i[j]=null,l?(i[j]={},h||(i[j].toJSON=d.noop),i[j][f]=l):h&&(d.support.deleteExpando?delete b[d.expando]:b.removeAttribute?b.removeAttribute(d.expando):b[d.expando]=null)}},_data:function(a,b,c){return d.data(a,b,c,!0)},acceptData:function(a){if(a.nodeName){var b=d.noData[a.nodeName.toLowerCase()];if(b)return b!==!0&&a.getAttribute("classid")===b}return!0}}),d.fn.extend({data:function(a,c){var e=null;if(typeof a==="undefined"){if(this.length){e=d.data(this[0]);if(this[0].nodeType===1){var g=this[0].attributes,h;for(var i=0,j=g.length;i<j;i++)h=g[i].name,h.indexOf("data-")===0&&(h=h.substr(5),f(this[0],h,e[h]))}}return e}if(typeof a==="object")return this.each(function(){d.data(this,a)});var k=a.split(".");k[1]=k[1]?"."+k[1]:"";if(c===b){e=this.triggerHandler("getData"+k[1]+"!",[k[0]]),e===b&&this.length&&(e=d.data(this[0],a),e=f(this[0],a,e));return e===b&&k[1]?this.data(k[0]):e}return this.each(function(){var b=d(this),e=[k[0],c];b.triggerHandler("setData"+k[1]+"!",e),d.data(this,a,c),b.triggerHandler("changeData"+k[1]+"!",e)})},removeData:function(a){return this.each(function(){d.removeData(this,a)})}}),d.extend({queue:function(a,b,c){if(a){b=(b||"fx")+"queue";var e=d._data(a,b);if(!c)return e||[];!e||d.isArray(c)?e=d._data(a,b,d.makeArray(c)):e.push(c);return e}},dequeue:function(a,b){b=b||"fx";var c=d.queue(a,b),e=c.shift();e==="inprogress"&&(e=c.shift()),e&&(b==="fx"&&c.unshift("inprogress"),e.call(a,function(){d.dequeue(a,b)})),c.length||d.removeData(a,b+"queue",!0)}}),d.fn.extend({queue:function(a,c){typeof a!=="string"&&(c=a,a="fx");if(c===b)return d.queue(this[0],a);return this.each(function(b){var e=d.queue(this,a,c);a==="fx"&&e[0]!=="inprogress"&&d.dequeue(this,a)})},dequeue:function(a){return this.each(function(){d.dequeue(this,a)})},delay:function(a,b){a=d.fx?d.fx.speeds[a]||a:a,b=b||"fx";return this.queue(b,function(){var c=this;setTimeout(function(){d.dequeue(c,b)},a)})},clearQueue:function(a){return this.queue(a||"fx",[])}});var h=/[\n\t\r]/g,i=/\s+/,j=/\r/g,k=/^(?:href|src|style)$/,l=/^(?:button|input)$/i,m=/^(?:button|input|object|select|textarea)$/i,n=/^a(?:rea)?$/i,o=/^(?:radio|checkbox)$/i;d.props={"for":"htmlFor","class":"className",readonly:"readOnly",maxlength:"maxLength",cellspacing:"cellSpacing",rowspan:"rowSpan",colspan:"colSpan",tabindex:"tabIndex",usemap:"useMap",frameborder:"frameBorder"},d.fn.extend({attr:function(a,b){return d.access(this,a,b,!0,d.attr)},removeAttr:function(a,b){return this.each(function(){d.attr(this,a,""),this.nodeType===1&&this.removeAttribute(a)})},addClass:function(a){if(d.isFunction(a))return this.each(function(b){var c=d(this);c.addClass(a.call(this,b,c.attr("class")))});if(a&&typeof a==="string"){var b=(a||"").split(i);for(var c=0,e=this.length;c<e;c++){var f=this[c];if(f.nodeType===1)if(f.className){var g=" "+f.className+" ",h=f.className;for(var j=0,k=b.length;j<k;j++)g.indexOf(" "+b[j]+" ")<0&&(h+=" "+b[j]);f.className=d.trim(h)}else f.className=a}}return this},removeClass:function(a){if(d.isFunction(a))return this.each(function(b){var c=d(this);c.removeClass(a.call(this,b,c.attr("class")))});if(a&&typeof a==="string"||a===b){var c=(a||"").split(i);for(var e=0,f=this.length;e<f;e++){var g=this[e];if(g.nodeType===1&&g.className)if(a){var j=(" "+g.className+" ").replace(h," ");for(var k=0,l=c.length;k<l;k++)j=j.replace(" "+c[k]+" "," ");g.className=d.trim(j)}else g.className=""}}return this},toggleClass:function(a,b){var c=typeof a,e=typeof b==="boolean";if(d.isFunction(a))return this.each(function(c){var e=d(this);e.toggleClass(a.call(this,c,e.attr("class"),b),b)});return this.each(function(){if(c==="string"){var f,g=0,h=d(this),j=b,k=a.split(i);while(f=k[g++])j=e?j:!h.hasClass(f),h[j?"addClass":"removeClass"](f)}else if(c==="undefined"||c==="boolean")this.className&&d._data(this,"__className__",this.className),this.className=this.className||a===!1?"":d._data(this,"__className__")||""})},hasClass:function(a){var b=" "+a+" ";for(var c=0,d=this.length;c<d;c++)if((" "+this[c].className+" ").replace(h," ").indexOf(b)>-1)return!0;return!1},val:function(a){if(!arguments.length){var c=this[0];if(c){if(d.nodeName(c,"option")){var e=c.attributes.value;return!e||e.specified?c.value:c.text}if(d.nodeName(c,"select")){var f=c.selectedIndex,g=[],h=c.options,i=c.type==="select-one";if(f<0)return null;for(var k=i?f:0,l=i?f+1:h.length;k<l;k++){var m=h[k];if(m.selected&&(d.support.optDisabled?!m.disabled:m.getAttribute("disabled")===null)&&(!m.parentNode.disabled||!d.nodeName(m.parentNode,"optgroup"))){a=d(m).val();if(i)return a;g.push(a)}}if(i&&!g.length&&h.length)return d(h[f]).val();return g}if(o.test(c.type)&&!d.support.checkOn)return c.getAttribute("value")===null?"on":c.value;return(c.value||"").replace(j,"")}return b}var n=d.isFunction(a);return this.each(function(b){var c=d(this),e=a;if(this.nodeType===1){n&&(e=a.call(this,b,c.val())),e==null?e="":typeof e==="number"?e+="":d.isArray(e)&&(e=d.map(e,function(a){return a==null?"":a+""}));if(d.isArray(e)&&o.test(this.type))this.checked=d.inArray(c.val(),e)>=0;else if(d.nodeName(this,"select")){var f=d.makeArray(e);d("option",this).each(function(){this.selected=d.inArray(d(this).val(),f)>=0}),f.length||(this.selectedIndex=-1)}else this.value=e}})}}),d.extend({attrFn:{val:!0,css:!0,html:!0,text:!0,data:!0,width:!0,height:!0,offset:!0},attr:function(a,c,e,f){if(!a||a.nodeType===3||a.nodeType===8||a.nodeType===2)return b;if(f&&c in d.attrFn)return d(a)[c](e);var g=a.nodeType!==1||!d.isXMLDoc(a),h=e!==b;c=g&&d.props[c]||c;if(a.nodeType===1){var i=k.test(c);if(c==="selected"&&!d.support.optSelected){var j=a.parentNode;j&&(j.selectedIndex,j.parentNode&&j.parentNode.selectedIndex)}if((c in a||a[c]!==b)&&g&&!i){h&&(c==="type"&&l.test(a.nodeName)&&a.parentNode&&d.error("type property can't be changed"),e===null?a.nodeType===1&&a.removeAttribute(c):a[c]=e);if(d.nodeName(a,"form")&&a.getAttributeNode(c))return a.getAttributeNode(c).nodeValue;if(c==="tabIndex"){var o=a.getAttributeNode("tabIndex");return o&&o.specified?o.value:m.test(a.nodeName)||n.test(a.nodeName)&&a.href?0:b}return a[c]}if(!d.support.style&&g&&c==="style"){h&&(a.style.cssText=""+e);return a.style.cssText}h&&a.setAttribute(c,""+e);if(!a.attributes[c]&&(a.hasAttribute&&!a.hasAttribute(c)))return b;var p=!d.support.hrefNormalized&&g&&i?a.getAttribute(c,2):a.getAttribute(c);return p===null?b:p}h&&(a[c]=e);return a[c]}});var p=/\.(.*)$/,q=/^(?:textarea|input|select)$/i,r=/\./g,s=/ /g,t=/[^\w\s.|`]/g,u=function(a){return a.replace(t,"\\$&")};d.event={add:function(c,e,f,g){if(c.nodeType!==3&&c.nodeType!==8){try{d.isWindow(c)&&(c!==a&&!c.frameElement)&&(c=a)}catch(h){}if(f===!1)f=v;else if(!f)return;var i,j;f.handler&&(i=f,f=i.handler),f.guid||(f.guid=d.guid++);var k=d._data(c);if(!k)return;var l=k.events,m=k.handle;l||(k.events=l={}),m||(k.handle=m=function(){return typeof d!=="undefined"&&!d.event.triggered?d.event.handle.apply(m.elem,arguments):b}),m.elem=c,e=e.split(" ");var n,o=0,p;while(n=e[o++]){j=i?d.extend({},i):{handler:f,data:g},n.indexOf(".")>-1?(p=n.split("."),n=p.shift(),j.namespace=p.slice(0).sort().join(".")):(p=[],j.namespace=""),j.type=n,j.guid||(j.guid=f.guid);var q=l[n],r=d.event.special[n]||{};if(!q){q=l[n]=[];if(!r.setup||r.setup.call(c,g,p,m)===!1)c.addEventListener?c.addEventListener(n,m,!1):c.attachEvent&&c.attachEvent("on"+n,m)}r.add&&(r.add.call(c,j),j.handler.guid||(j.handler.guid=f.guid)),q.push(j),d.event.global[n]=!0}c=null}},global:{},remove:function(a,c,e,f){if(a.nodeType!==3&&a.nodeType!==8){e===!1&&(e=v);var g,h,i,j,k=0,l,m,n,o,p,q,r,s=d.hasData(a)&&d._data(a),t=s&&s.events;if(!s||!t)return;c&&c.type&&(e=c.handler,c=c.type);if(!c||typeof c==="string"&&c.charAt(0)==="."){c=c||"";for(h in t)d.event.remove(a,h+c);return}c=c.split(" ");while(h=c[k++]){r=h,q=null,l=h.indexOf(".")<0,m=[],l||(m=h.split("."),h=m.shift(),n=new RegExp("(^|\\.)"+d.map(m.slice(0).sort(),u).join("\\.(?:.*\\.)?")+"(\\.|$)")),p=t[h];if(!p)continue;if(!e){for(j=0;j<p.length;j++){q=p[j];if(l||n.test(q.namespace))d.event.remove(a,r,q.handler,j),p.splice(j--,1)}continue}o=d.event.special[h]||{};for(j=f||0;j<p.length;j++){q=p[j];if(e.guid===q.guid){if(l||n.test(q.namespace))f==null&&p.splice(j--,1),o.remove&&o.remove.call(a,q);if(f!=null)break}}if(p.length===0||f!=null&&p.length===1)(!o.teardown||o.teardown.call(a,m)===!1)&&d.removeEvent(a,h,s.handle),g=null,delete t[h]}if(d.isEmptyObject(t)){var w=s.handle;w&&(w.elem=null),delete s.events,delete s.handle,d.isEmptyObject(s)&&d.removeData(a,b,!0)}}},trigger:function(a,c,e){var f=a.type||a,g=arguments[3];if(!g){a=typeof a==="object"?a[d.expando]?a:d.extend(d.Event(f),a):d.Event(f),f.indexOf("!")>=0&&(a.type=f=f.slice(0,-1),a.exclusive=!0),e||(a.stopPropagation(),d.event.global[f]&&d.each(d.cache,function(){var b=d.expando,e=this[b];e&&e.events&&e.events[f]&&d.event.trigger(a,c,e.handle.elem)}));if(!e||e.nodeType===3||e.nodeType===8)return b;a.result=b,a.target=e,c=d.makeArray(c),c.unshift(a)}a.currentTarget=e;var h=d._data(e,"handle");h&&h.apply(e,c);var i=e.parentNode||e.ownerDocument;try{e&&e.nodeName&&d.noData[e.nodeName.toLowerCase()]||e["on"+f]&&e["on"+f].apply(e,c)===!1&&(a.result=!1,a.preventDefault())}catch(j){}if(!a.isPropagationStopped()&&i)d.event.trigger(a,c,i,!0);else if(!a.isDefaultPrevented()){var k,l=a.target,m=f.replace(p,""),n=d.nodeName(l,"a")&&m==="click",o=d.event.special[m]||{};if((!o._default||o._default.call(e,a)===!1)&&!n&&!(l&&l.nodeName&&d.noData[l.nodeName.toLowerCase()])){try{l[m]&&(k=l["on"+m],k&&(l["on"+m]=null),d.event.triggered=!0,l[m]())}catch(q){}k&&(l["on"+m]=k),d.event.triggered=!1}}},handle:function(c){var e,f,g,h,i,j=[],k=d.makeArray(arguments);c=k[0]=d.event.fix(c||a.event),c.currentTarget=this,e=c.type.indexOf(".")<0&&!c.exclusive,e||(g=c.type.split("."),c.type=g.shift(),j=g.slice(0).sort(),h=new RegExp("(^|\\.)"+j.join("\\.(?:.*\\.)?")+"(\\.|$)")),c.namespace=c.namespace||j.join("."),i=d._data(this,"events"),f=(i||{})[c.type];if(i&&f){f=f.slice(0);for(var l=0,m=f.length;l<m;l++){var n=f[l];if(e||h.test(n.namespace)){c.handler=n.handler,c.data=n.data,c.handleObj=n;var o=n.handler.apply(this,k);o!==b&&(c.result=o,o===!1&&(c.preventDefault(),c.stopPropagation()));if(c.isImmediatePropagationStopped())break}}}return c.result},props:"altKey attrChange attrName bubbles button cancelable charCode clientX clientY ctrlKey currentTarget data detail eventPhase fromElement handler keyCode layerX layerY metaKey newValue offsetX offsetY pageX pageY prevValue relatedNode relatedTarget screenX screenY shiftKey srcElement target toElement view wheelDelta which".split(" "),fix:function(a){if(a[d.expando])return a;var e=a;a=d.Event(e);for(var f=this.props.length,g;f;)g=this.props[--f],a[g]=e[g];a.target||(a.target=a.srcElement||c),a.target.nodeType===3&&(a.target=a.target.parentNode),!a.relatedTarget&&a.fromElement&&(a.relatedTarget=a.fromElement===a.target?a.toElement:a.fromElement);if(a.pageX==null&&a.clientX!=null){var h=c.documentElement,i=c.body;a.pageX=a.clientX+(h&&h.scrollLeft||i&&i.scrollLeft||0)-(h&&h.clientLeft||i&&i.clientLeft||0),a.pageY=a.clientY+(h&&h.scrollTop||i&&i.scrollTop||0)-(h&&h.clientTop||i&&i.clientTop||0)}a.which==null&&(a.charCode!=null||a.keyCode!=null)&&(a.which=a.charCode!=null?a.charCode:a.keyCode),!a.metaKey&&a.ctrlKey&&(a.metaKey=a.ctrlKey),!a.which&&a.button!==b&&(a.which=a.button&1?1:a.button&2?3:a.button&4?2:0);return a},guid:1e8,proxy:d.proxy,special:{ready:{setup:d.bindReady,teardown:d.noop},live:{add:function(a){d.event.add(this,F(a.origType,a.selector),d.extend({},a,{handler:E,guid:a.handler.guid}))},remove:function(a){d.event.remove(this,F(a.origType,a.selector),a)}},beforeunload:{setup:function(a,b,c){d.isWindow(this)&&(this.onbeforeunload=c)},teardown:function(a,b){this.onbeforeunload===b&&(this.onbeforeunload=null)}}}},d.removeEvent=c.removeEventListener?function(a,b,c){a.removeEventListener&&a.removeEventListener(b,c,!1)}:function(a,b,c){a.detachEvent&&a.detachEvent("on"+b,c)},d.Event=function(a){if(!this.preventDefault)return new d.Event(a);a&&a.type?(this.originalEvent=a,this.type=a.type,this.isDefaultPrevented=a.defaultPrevented||a.returnValue===!1||a.getPreventDefault&&a.getPreventDefault()?w:v):this.type=a,this.timeStamp=d.now(),this[d.expando]=!0},d.Event.prototype={preventDefault:function(){this.isDefaultPrevented=w;var a=this.originalEvent;a&&(a.preventDefault?a.preventDefault():a.returnValue=!1)},stopPropagation:function(){this.isPropagationStopped=w;var a=this.originalEvent;a&&(a.stopPropagation&&a.stopPropagation(),a.cancelBubble=!0)},stopImmediatePropagation:function(){this.isImmediatePropagationStopped=w,this.stopPropagation()},isDefaultPrevented:v,isPropagationStopped:v,isImmediatePropagationStopped:v};var x=function(a){var b=a.relatedTarget;try{if(b!==c&&!b.parentNode)return;while(b&&b!==this)b=b.parentNode;b!==this&&(a.type=a.data,d.event.handle.apply(this,arguments))}catch(e){}},y=function(a){a.type=a.data,d.event.handle.apply(this,arguments)};d.each({mouseenter:"mouseover",mouseleave:"mouseout"},function(a,b){d.event.special[a]={setup:function(c){d.event.add(this,b,c&&c.selector?y:x,a)},teardown:function(a){d.event.remove(this,b,a&&a.selector?y:x)}}}),d.support.submitBubbles||(d.event.special.submit={setup:function(a,b){if(this.nodeName&&this.nodeName.toLowerCase()!=="form")d.event.add(this,"click.specialSubmit",function(a){var b=a.target,c=b.type;(c==="submit"||c==="image")&&d(b).closest("form").length&&C("submit",this,arguments)}),d.event.add(this,"keypress.specialSubmit",function(a){var b=a.target,c=b.type;(c==="text"||c==="password")&&d(b).closest("form").length&&a.keyCode===13&&C("submit",this,arguments)});else return!1},teardown:function(a){d.event.remove(this,".specialSubmit")}});if(!d.support.changeBubbles){var z,A=function(a){var b=a.type,c=a.value;b==="radio"||b==="checkbox"?c=a.checked:b==="select-multiple"?c=a.selectedIndex>-1?d.map(a.options,function(a){return a.selected}).join("-"):"":a.nodeName.toLowerCase()==="select"&&(c=a.selectedIndex);return c},B=function B(a){var c=a.target,e,f;if(q.test(c.nodeName)&&!c.readOnly){e=d._data(c,"_change_data"),f=A(c),(a.type!=="focusout"||c.type!=="radio")&&d._data(c,"_change_data",f);if(e===b||f===e)return;if(e!=null||f)a.type="change",a.liveFired=b,d.event.trigger(a,arguments[1],c)}};d.event.special.change={filters:{focusout:B,beforedeactivate:B,click:function(a){var b=a.target,c=b.type;(c==="radio"||c==="checkbox"||b.nodeName.toLowerCase()==="select")&&B.call(this,a)},keydown:function(a){var b=a.target,c=b.type;(a.keyCode===13&&b.nodeName.toLowerCase()!=="textarea"||a.keyCode===32&&(c==="checkbox"||c==="radio")||c==="select-multiple")&&B.call(this,a)},beforeactivate:function(a){var b=a.target;d._data(b,"_change_data",A(b))}},setup:function(a,b){if(this.type==="file")return!1;for(var c in z)d.event.add(this,c+".specialChange",z[c]);return q.test(this.nodeName)},teardown:function(a){d.event.remove(this,".specialChange");return q.test(this.nodeName)}},z=d.event.special.change.filters,z.focus=z.beforeactivate}c.addEventListener&&d.each({focus:"focusin",blur:"focusout"},function(a,b){function c(a){a=d.event.fix(a),a.type=b;return d.event.handle.call(this,a)}d.event.special[b]={setup:function(){this.addEventListener(a,c,!0)},teardown:function(){this.removeEventListener(a,c,!0)}}}),d.each(["bind","one"],function(a,c){d.fn[c]=function(a,e,f){if(typeof a==="object"){for(var g in a)this[c](g,e,a[g],f);return this}if(d.isFunction(e)||e===!1)f=e,e=b;var h=c==="one"?d.proxy(f,function(a){d(this).unbind(a,h);return f.apply(this,arguments)}):f;if(a==="unload"&&c!=="one")this.one(a,e,f);else for(var i=0,j=this.length;i<j;i++)d.event.add(this[i],a,h,e);return this}}),d.fn.extend({unbind:function(a,b){if(typeof a!=="object"||a.preventDefault)for(var e=0,f=this.length;e<f;e++)d.event.remove(this[e],a,b);else for(var c in a)this.unbind(c,a[c]);return this},delegate:function(a,b,c,d){return this.live(b,c,d,a)},undelegate:function(a,b,c){return arguments.length===0?this.unbind("live"):this.die(b,null,c,a)},trigger:function(a,b){return this.each(function(){d.event.trigger(a,b,this)})},triggerHandler:function(a,b){if(this[0]){var c=d.Event(a);c.preventDefault(),c.stopPropagation(),d.event.trigger(c,b,this[0]);return c.result}},toggle:function(a){var b=arguments,c=1;while(c<b.length)d.proxy(a,b[c++]);return this.click(d.proxy(a,function(e){var f=(d._data(this,"lastToggle"+a.guid)||0)%c;d._data(this,"lastToggle"+a.guid,f+1),e.preventDefault();return b[f].apply(this,arguments)||!1}))},hover:function(a,b){return this.mouseenter(a).mouseleave(b||a)}});var D={focus:"focusin",blur:"focusout",mouseenter:"mouseover",mouseleave:"mouseout"};d.each(["live","die"],function(a,c){d.fn[c]=function(a,e,f,g){var h,i=0,j,k,l,m=g||this.selector,n=g?this:d(this.context);if(typeof a==="object"&&!a.preventDefault){for(var o in a)n[c](o,e,a[o],m);return this}d.isFunction(e)&&(f=e,e=b),a=(a||"").split(" ");while((h=a[i++])!=null){j=p.exec(h),k="",j&&(k=j[0],h=h.replace(p,""));if(h==="hover"){a.push("mouseenter"+k,"mouseleave"+k);continue}l=h,h==="focus"||h==="blur"?(a.push(D[h]+k),h=h+k):h=(D[h]||h)+k;if(c==="live")for(var q=0,r=n.length;q<r;q++)d.event.add(n[q],"live."+F(h,m),{data:e,selector:m,handler:f,origType:h,origHandler:f,preType:l});else n.unbind("live."+F(h,m),f)}return this}}),d.each("blur focus focusin focusout load resize scroll unload click dblclick mousedown mouseup mousemove mouseover mouseout mouseenter mouseleave change select submit keydown keypress keyup error".split(" "),function(a,b){d.fn[b]=function(a,c){c==null&&(c=a,a=null);return arguments.length>0?this.bind(b,a,c):this.trigger(b)},d.attrFn&&(d.attrFn[b]=!0)}),function(){function u(a,b,c,d,e,f){for(var g=0,h=d.length;g<h;g++){var i=d[g];if(i){var j=!1;i=i[a];while(i){if(i.sizcache===c){j=d[i.sizset];break}if(i.nodeType===1){f||(i.sizcache=c,i.sizset=g);if(typeof b!=="string"){if(i===b){j=!0;break}}else if(k.filter(b,[i]).length>0){j=i;break}}i=i[a]}d[g]=j}}}function t(a,b,c,d,e,f){for(var g=0,h=d.length;g<h;g++){var i=d[g];if(i){var j=!1;i=i[a];while(i){if(i.sizcache===c){j=d[i.sizset];break}i.nodeType===1&&!f&&(i.sizcache=c,i.sizset=g);if(i.nodeName.toLowerCase()===b){j=i;break}i=i[a]}d[g]=j}}}var a=/((?:\((?:\([^()]+\)|[^()]+)+\)|\[(?:\[[^\[\]]*\]|['"][^'"]*['"]|[^\[\]'"]+)+\]|\\.|[^ >+~,(\[\\]+)+|[>+~])(\s*,\s*)?((?:.|\r|\n)*)/g,e=0,f=Object.prototype.toString,g=!1,h=!0,i=/\\/g,j=/\W/;[0,0].sort(function(){h=!1;return 0});var k=function(b,d,e,g){e=e||[],d=d||c;var h=d;if(d.nodeType!==1&&d.nodeType!==9)return[];if(!b||typeof b!=="string")return e;var i,j,n,o,q,r,s,t,u=!0,w=k.isXML(d),x=[],y=b;do{a.exec(""),i=a.exec(y);if(i){y=i[3],x.push(i[1]);if(i[2]){o=i[3];break}}}while(i);if(x.length>1&&m.exec(b))if(x.length===2&&l.relative[x[0]])j=v(x[0]+x[1],d);else{j=l.relative[x[0]]?[d]:k(x.shift(),d);while(x.length)b=x.shift(),l.relative[b]&&(b+=x.shift()),j=v(b,j)}else{!g&&x.length>1&&d.nodeType===9&&!w&&l.match.ID.test(x[0])&&!l.match.ID.test(x[x.length-1])&&(q=k.find(x.shift(),d,w),d=q.expr?k.filter(q.expr,q.set)[0]:q.set[0]);if(d){q=g?{expr:x.pop(),set:p(g)}:k.find(x.pop(),x.length===1&&(x[0]==="~"||x[0]==="+")&&d.parentNode?d.parentNode:d,w),j=q.expr?k.filter(q.expr,q.set):q.set,x.length>0?n=p(j):u=!1;while(x.length)r=x.pop(),s=r,l.relative[r]?s=x.pop():r="",s==null&&(s=d),l.relative[r](n,s,w)}else n=x=[]}n||(n=j),n||k.error(r||b);if(f.call(n)==="[object Array]")if(u)if(d&&d.nodeType===1)for(t=0;n[t]!=null;t++)n[t]&&(n[t]===!0||n[t].nodeType===1&&k.contains(d,n[t]))&&e.push(j[t]);else for(t=0;n[t]!=null;t++)n[t]&&n[t].nodeType===1&&e.push(j[t]);else e.push.apply(e,n);else p(n,e);o&&(k(o,h,e,g),k.uniqueSort(e));return e};k.uniqueSort=function(a){if(r){g=h,a.sort(r);if(g)for(var b=1;b<a.length;b++)a[b]===a[b-1]&&a.splice(b--,1)}return a},k.matches=function(a,b){return k(a,null,null,b)},k.matchesSelector=function(a,b){return k(b,null,null,[a]).length>0},k.find=function(a,b,c){var d;if(!a)return[];for(var e=0,f=l.order.length;e<f;e++){var g,h=l.order[e];if(g=l.leftMatch[h].exec(a)){var j=g[1];g.splice(1,1);if(j.substr(j.length-1)!=="\\"){g[1]=(g[1]||"").replace(i,""),d=l.find[h](g,b,c);if(d!=null){a=a.replace(l.match[h],"");break}}}}d||(d=typeof b.getElementsByTagName!=="undefined"?b.getElementsByTagName("*"):[]);return{set:d,expr:a}},k.filter=function(a,c,d,e){var f,g,h=a,i=[],j=c,m=c&&c[0]&&k.isXML(c[0]);while(a&&c.length){for(var n in l.filter)if((f=l.leftMatch[n].exec(a))!=null&&f[2]){var o,p,q=l.filter[n],r=f[1];g=!1,f.splice(1,1);if(r.substr(r.length-1)==="\\")continue;j===i&&(i=[]);if(l.preFilter[n]){f=l.preFilter[n](f,j,d,i,e,m);if(f){if(f===!0)continue}else g=o=!0}if(f)for(var s=0;(p=j[s])!=null;s++)if(p){o=q(p,f,s,j);var t=e^!!o;d&&o!=null?t?g=!0:j[s]=!1:t&&(i.push(p),g=!0)}if(o!==b){d||(j=i),a=a.replace(l.match[n],"");if(!g)return[];break}}if(a===h)if(g==null)k.error(a);else break;h=a}return j},k.error=function(a){throw"Syntax error, unrecognized expression: "+a};var l=k.selectors={order:["ID","NAME","TAG"],match:{ID:/#((?:[\w\u00c0-\uFFFF\-]|\\.)+)/,CLASS:/\.((?:[\w\u00c0-\uFFFF\-]|\\.)+)/,NAME:/\[name=['"]*((?:[\w\u00c0-\uFFFF\-]|\\.)+)['"]*\]/,ATTR:/\[\s*((?:[\w\u00c0-\uFFFF\-]|\\.)+)\s*(?:(\S?=)\s*(?:(['"])(.*?)\3|(#?(?:[\w\u00c0-\uFFFF\-]|\\.)*)|)|)\s*\]/,TAG:/^((?:[\w\u00c0-\uFFFF\*\-]|\\.)+)/,CHILD:/:(only|nth|last|first)-child(?:\(\s*(even|odd|(?:[+\-]?\d+|(?:[+\-]?\d*)?n\s*(?:[+\-]\s*\d+)?))\s*\))?/,POS:/:(nth|eq|gt|lt|first|last|even|odd)(?:\((\d*)\))?(?=[^\-]|$)/,PSEUDO:/:((?:[\w\u00c0-\uFFFF\-]|\\.)+)(?:\((['"]?)((?:\([^\)]+\)|[^\(\)]*)+)\2\))?/},leftMatch:{},attrMap:{"class":"className","for":"htmlFor"},attrHandle:{href:function(a){return a.getAttribute("href")},type:function(a){return a.getAttribute("type")}},relative:{"+":function(a,b){var c=typeof b==="string",d=c&&!j.test(b),e=c&&!d;d&&(b=b.toLowerCase());for(var f=0,g=a.length,h;f<g;f++)if(h=a[f]){while((h=h.previousSibling)&&h.nodeType!==1){}a[f]=e||h&&h.nodeName.toLowerCase()===b?h||!1:h===b}e&&k.filter(b,a,!0)},">":function(a,b){var c,d=typeof b==="string",e=0,f=a.length;if(d&&!j.test(b)){b=b.toLowerCase();for(;e<f;e++){c=a[e];if(c){var g=c.parentNode;a[e]=g.nodeName.toLowerCase()===b?g:!1}}}else{for(;e<f;e++)c=a[e],c&&(a[e]=d?c.parentNode:c.parentNode===b);d&&k.filter(b,a,!0)}},"":function(a,b,c){var d,f=e++,g=u;typeof b==="string"&&!j.test(b)&&(b=b.toLowerCase(),d=b,g=t),g("parentNode",b,f,a,d,c)},"~":function(a,b,c){var d,f=e++,g=u;typeof b==="string"&&!j.test(b)&&(b=b.toLowerCase(),d=b,g=t),g("previousSibling",b,f,a,d,c)}},find:{ID:function(a,b,c){if(typeof b.getElementById!=="undefined"&&!c){var d=b.getElementById(a[1]);return d&&d.parentNode?[d]:[]}},NAME:function(a,b){if(typeof b.getElementsByName!=="undefined"){var c=[],d=b.getElementsByName(a[1]);for(var e=0,f=d.length;e<f;e++)d[e].getAttribute("name")===a[1]&&c.push(d[e]);return c.length===0?null:c}},TAG:function(a,b){if(typeof b.getElementsByTagName!=="undefined")return b.getElementsByTagName(a[1])}},preFilter:{CLASS:function(a,b,c,d,e,f){a=" "+a[1].replace(i,"")+" ";if(f)return a;for(var g=0,h;(h=b[g])!=null;g++)h&&(e^(h.className&&(" "+h.className+" ").replace(/[\t\n\r]/g," ").indexOf(a)>=0)?c||d.push(h):c&&(b[g]=!1));return!1},ID:function(a){return a[1].replace(i,"")},TAG:function(a,b){return a[1].replace(i,"").toLowerCase()},CHILD:function(a){if(a[1]==="nth"){a[2]||k.error(a[0]),a[2]=a[2].replace(/^\+|\s*/g,"");var b=/(-?)(\d*)(?:n([+\-]?\d*))?/.exec(a[2]==="even"&&"2n"||a[2]==="odd"&&"2n+1"||!/\D/.test(a[2])&&"0n+"+a[2]||a[2]);a[2]=b[1]+(b[2]||1)-0,a[3]=b[3]-0}else a[2]&&k.error(a[0]);a[0]=e++;return a},ATTR:function(a,b,c,d,e,f){var g=a[1]=a[1].replace(i,"");!f&&l.attrMap[g]&&(a[1]=l.attrMap[g]),a[4]=(a[4]||a[5]||"").replace(i,""),a[2]==="~="&&(a[4]=" "+a[4]+" ");return a},PSEUDO:function(b,c,d,e,f){if(b[1]==="not")if((a.exec(b[3])||"").length>1||/^\w/.test(b[3]))b[3]=k(b[3],null,null,c);else{var g=k.filter(b[3],c,d,!0^f);d||e.push.apply(e,g);return!1}else if(l.match.POS.test(b[0])||l.match.CHILD.test(b[0]))return!0;return b},POS:function(a){a.unshift(!0);return a}},filters:{enabled:function(a){return a.disabled===!1&&a.type!=="hidden"},disabled:function(a){return a.disabled===!0},checked:function(a){return a.checked===!0},selected:function(a){a.parentNode&&a.parentNode.selectedIndex;return a.selected===!0},parent:function(a){return!!a.firstChild},empty:function(a){return!a.firstChild},has:function(a,b,c){return!!k(c[3],a).length},header:function(a){return/h\d/i.test(a.nodeName)},text:function(a){return"text"===a.getAttribute("type")},radio:function(a){return"radio"===a.type},checkbox:function(a){return"checkbox"===a.type},file:function(a){return"file"===a.type},password:function(a){return"password"===a.type},submit:function(a){return"submit"===a.type},image:function(a){return"image"===a.type},reset:function(a){return"reset"===a.type},button:function(a){return"button"===a.type||a.nodeName.toLowerCase()==="button"},input:function(a){return/input|select|textarea|button/i.test(a.nodeName)}},setFilters:{first:function(a,b){return b===0},last:function(a,b,c,d){return b===d.length-1},even:function(a,b){return b%2===0},odd:function(a,b){return b%2===1},lt:function(a,b,c){return b<c[3]-0},gt:function(a,b,c){return b>c[3]-0},nth:function(a,b,c){return c[3]-0===b},eq:function(a,b,c){return c[3]-0===b}},filter:{PSEUDO:function(a,b,c,d){var e=b[1],f=l.filters[e];if(f)return f(a,c,b,d);if(e==="contains")return(a.textContent||a.innerText||k.getText([a])||"").indexOf(b[3])>=0;if(e==="not"){var g=b[3];for(var h=0,i=g.length;h<i;h++)if(g[h]===a)return!1;return!0}k.error(e)},CHILD:function(a,b){var c=b[1],d=a;switch(c){case"only":case"first":while(d=d.previousSibling)if(d.nodeType===1)return!1;if(c==="first")return!0;d=a;case"last":while(d=d.nextSibling)if(d.nodeType===1)return!1;return!0;case"nth":var e=b[2],f=b[3];if(e===1&&f===0)return!0;var g=b[0],h=a.parentNode;if(h&&(h.sizcache!==g||!a.nodeIndex)){var i=0;for(d=h.firstChild;d;d=d.nextSibling)d.nodeType===1&&(d.nodeIndex=++i);h.sizcache=g}var j=a.nodeIndex-f;return e===0?j===0:j%e===0&&j/e>=0}},ID:function(a,b){return a.nodeType===1&&a.getAttribute("id")===b},TAG:function(a,b){return b==="*"&&a.nodeType===1||a.nodeName.toLowerCase()===b},CLASS:function(a,b){return(" "+(a.className||a.getAttribute("class"))+" ").indexOf(b)>-1},ATTR:function(a,b){var c=b[1],d=l.attrHandle[c]?l.attrHandle[c](a):a[c]!=null?a[c]:a.getAttribute(c),e=d+"",f=b[2],g=b[4];return d==null?f==="!=":f==="="?e===g:f==="*="?e.indexOf(g)>=0:f==="~="?(" "+e+" ").indexOf(g)>=0:g?f==="!="?e!==g:f==="^="?e.indexOf(g)===0:f==="$="?e.substr(e.length-g.length)===g:f==="|="?e===g||e.substr(0,g.length+1)===g+"-":!1:e&&d!==!1},POS:function(a,b,c,d){var e=b[2],f=l.setFilters[e];if(f)return f(a,c,b,d)}}},m=l.match.POS,n=function(a,b){return"\\"+(b-0+1)};for(var o in l.match)l.match[o]=new RegExp(l.match[o].source+/(?![^\[]*\])(?![^\(]*\))/.source),l.leftMatch[o]=new RegExp(/(^(?:.|\r|\n)*?)/.source+l.match[o].source.replace(/\\(\d+)/g,n));var p=function(a,b){a=Array.prototype.slice.call(a,0);if(b){b.push.apply(b,a);return b}return a};try{Array.prototype.slice.call(c.documentElement.childNodes,0)[0].nodeType}catch(q){p=function(a,b){var c=0,d=b||[];if(f.call(a)==="[object Array]")Array.prototype.push.apply(d,a);else if(typeof a.length==="number")for(var e=a.length;c<e;c++)d.push(a[c]);else for(;a[c];c++)d.push(a[c]);return d}}var r,s;c.documentElement.compareDocumentPosition?r=function(a,b){if(a===b){g=!0;return 0}if(!a.compareDocumentPosition||!b.compareDocumentPosition)return a.compareDocumentPosition?-1:1;return a.compareDocumentPosition(b)&4?-1:1}:(r=function(a,b){var c,d,e=[],f=[],h=a.parentNode,i=b.parentNode,j=h;if(a===b){g=!0;return 0}if(h===i)return s(a,b);if(!h)return-1;if(!i)return 1;while(j)e.unshift(j),j=j.parentNode;j=i;while(j)f.unshift(j),j=j.parentNode;c=e.length,d=f.length;for(var k=0;k<c&&k<d;k++)if(e[k]!==f[k])return s(e[k],f[k]);return k===c?s(a,f[k],-1):s(e[k],b,1)},s=function(a,b,c){if(a===b)return c;var d=a.nextSibling;while(d){if(d===b)return-1;d=d.nextSibling}return 1}),k.getText=function(a){var b="",c;for(var d=0;a[d];d++)c=a[d],c.nodeType===3||c.nodeType===4?b+=c.nodeValue:c.nodeType!==8&&(b+=k.getText(c.childNodes));return b},function(){var a=c.createElement("div"),d="script"+(new Date).getTime(),e=c.documentElement;a.innerHTML="<a name='"+d+"'/>",e.insertBefore(a,e.firstChild),c.getElementById(d)&&(l.find.ID=function(a,c,d){if(typeof c.getElementById!=="undefined"&&!d){var e=c.getElementById(a[1]);return e?e.id===a[1]||typeof e.getAttributeNode!=="undefined"&&e.getAttributeNode("id").nodeValue===a[1]?[e]:b:[]}},l.filter.ID=function(a,b){var c=typeof a.getAttributeNode!=="undefined"&&a.getAttributeNode("id");return a.nodeType===1&&c&&c.nodeValue===b}),e.removeChild(a),e=a=null}(),function(){var a=c.createElement("div");a.appendChild(c.createComment("")),a.getElementsByTagName("*").length>0&&(l.find.TAG=function(a,b){var c=b.getElementsByTagName(a[1]);if(a[1]==="*"){var d=[];for(var e=0;c[e];e++)c[e].nodeType===1&&d.push(c[e]);c=d}return c}),a.innerHTML="<a href='#'></a>",a.firstChild&&typeof a.firstChild.getAttribute!=="undefined"&&a.firstChild.getAttribute("href")!=="#"&&(l.attrHandle.href=function(a){return a.getAttribute("href",2)}),a=null}(),c.querySelectorAll&&function(){var a=k,b=c.createElement("div"),d="__sizzle__";b.innerHTML="<p class='TEST'></p>";if(!b.querySelectorAll||b.querySelectorAll(".TEST").length!==0){k=function(b,e,f,g){e=e||c;if(!g&&!k.isXML(e)){var h=/^(\w+$)|^\.([\w\-]+$)|^#([\w\-]+$)/.exec(b);if(h&&(e.nodeType===1||e.nodeType===9)){if(h[1])return p(e.getElementsByTagName(b),f);if(h[2]&&l.find.CLASS&&e.getElementsByClassName)return p(e.getElementsByClassName(h[2]),f)}if(e.nodeType===9){if(b==="body"&&e.body)return p([e.body],f);if(h&&h[3]){var i=e.getElementById(h[3]);if(!i||!i.parentNode)return p([],f);if(i.id===h[3])return p([i],f)}try{return p(e.querySelectorAll(b),f)}catch(j){}}else if(e.nodeType===1&&e.nodeName.toLowerCase()!=="object"){var m=e,n=e.getAttribute("id"),o=n||d,q=e.parentNode,r=/^\s*[+~]/.test(b);n?o=o.replace(/'/g,"\\$&"):e.setAttribute("id",o),r&&q&&(e=e.parentNode);try{if(!r||q)return p(e.querySelectorAll("[id='"+o+"'] "+b),f)}catch(s){}finally{n||m.removeAttribute("id")}}}return a(b,e,f,g)};for(var e in a)k[e]=a[e];b=null}}(),function(){var a=c.documentElement,b=a.matchesSelector||a.mozMatchesSelector||a.webkitMatchesSelector||a.msMatchesSelector,d=!1;try{b.call(c.documentElement,"[test!='']:sizzle")}catch(e){d=!0}b&&(k.matchesSelector=function(a,c){c=c.replace(/\=\s*([^'"\]]*)\s*\]/g,"='$1']");if(!k.isXML(a))try{if(d||!l.match.PSEUDO.test(c)&&!/!=/.test(c))return b.call(a,c)}catch(e){}return k(c,null,null,[a]).length>0})}(),function(){var a=c.createElement("div");a.innerHTML="<div class='test e'></div><div class='test'></div>";if(a.getElementsByClassName&&a.getElementsByClassName("e").length!==0){a.lastChild.className="e";if(a.getElementsByClassName("e").length===1)return;l.order.splice(1,0,"CLASS"),l.find.CLASS=function(a,b,c){if(typeof b.getElementsByClassName!=="undefined"&&!c)return b.getElementsByClassName(a[1])},a=null}}(),c.documentElement.contains?k.contains=function(a,b){return a!==b&&(a.contains?a.contains(b):!0)}:c.documentElement.compareDocumentPosition?k.contains=function(a,b){return!!(a.compareDocumentPosition(b)&16)}:k.contains=function(){return!1},k.isXML=function(a){var b=(a?a.ownerDocument||a:0).documentElement;return b?b.nodeName!=="HTML":!1};var v=function(a,b){var c,d=[],e="",f=b.nodeType?[b]:b;while(c=l.match.PSEUDO.exec(a))e+=c[0],a=a.replace(l.match.PSEUDO,"");a=l.relative[a]?a+"*":a;for(var g=0,h=f.length;g<h;g++)k(a,f[g],d);return k.filter(e,d)};d.find=k,d.expr=k.selectors,d.expr[":"]=d.expr.filters,d.unique=k.uniqueSort,d.text=k.getText,d.isXMLDoc=k.isXML,d.contains=k.contains}();var G=/Until$/,H=/^(?:parents|prevUntil|prevAll)/,I=/,/,J=/^.[^:#\[\.,]*$/,K=Array.prototype.slice,L=d.expr.match.POS,M={children:!0,contents:!0,next:!0,prev:!0};d.fn.extend({find:function(a){var b=this.pushStack("","find",a),c=0;for(var e=0,f=this.length;e<f;e++){c=b.length,d.find(a,this[e],b);if(e>0)for(var g=c;g<b.length;g++)for(var h=0;h<c;h++)if(b[h]===b[g]){b.splice(g--,1);break}}return b},has:function(a){var b=d(a);return this.filter(function(){for(var a=0,c=b.length;a<c;a++)if(d.contains(this,b[a]))return!0})},not:function(a){return this.pushStack(O(this,a,!1),"not",a)},filter:function(a){return this.pushStack(O(this,a,!0),"filter",a)},is:function(a){return!!a&&d.filter(a,this).length>0},closest:function(a,b){var c=[],e,f,g=this[0];if(d.isArray(a)){var h,i,j={},k=1;if(g&&a.length){for(e=0,f=a.length;e<f;e++)i=a[e],j[i]||(j[i]=d.expr.match.POS.test(i)?d(i,b||this.context):i);while(g&&g.ownerDocument&&g!==b){for(i in j)h=j[i],(h.jquery?h.index(g)>-1:d(g).is(h))&&c.push({selector:i,elem:g,level:k});g=g.parentNode,k++}}return c}var l=L.test(a)?d(a,b||this.context):null;for(e=0,f=this.length;e<f;e++){g=this[e];while(g){if(l?l.index(g)>-1:d.find.matchesSelector(g,a)){c.push(g);break}g=g.parentNode;if(!g||!g.ownerDocument||g===b)break}}c=c.length>1?d.unique(c):c;return this.pushStack(c,"closest",a)},index:function(a){if(!a||typeof a==="string")return d.inArray(this[0],a?d(a):this.parent().children());return d.inArray(a.jquery?a[0]:a,this)},add:function(a,b){var c=typeof a==="string"?d(a,b):d.makeArray(a),e=d.merge(this.get(),c);return this.pushStack(N(c[0])||N(e[0])?e:d.unique(e))},andSelf:function(){return this.add(this.prevObject)}}),d.each({parent:function(a){var b=a.parentNode;return b&&b.nodeType!==11?b:null},parents:function(a){return d.dir(a,"parentNode")},parentsUntil:function(a,b,c){return d.dir(a,"parentNode",c)},next:function(a){return d.nth(a,2,"nextSibling")},prev:function(a){return d.nth(a,2,"previousSibling")},nextAll:function(a){return d.dir(a,"nextSibling")},prevAll:function(a){return d.dir(a,"previousSibling")},nextUntil:function(a,b,c){return d.dir(a,"nextSibling",c)},prevUntil:function(a,b,c){return d.dir(a,"previousSibling",c)},siblings:function(a){return d.sibling(a.parentNode.firstChild,a)},children:function(a){return d.sibling(a.firstChild)},contents:function(a){return d.nodeName(a,"iframe")?a.contentDocument||a.contentWindow.document:d.makeArray(a.childNodes)}},function(a,b){d.fn[a]=function(c,e){var f=d.map(this,b,c),g=K.call(arguments);G.test(a)||(e=c),e&&typeof e==="string"&&(f=d.filter(e,f)),f=this.length>1&&!M[a]?d.unique(f):f,(this.length>1||I.test(e))&&H.test(a)&&(f=f.reverse());return this.pushStack(f,a,g.join(","))}}),d.extend({filter:function(a,b,c){c&&(a=":not("+a+")");return b.length===1?d.find.matchesSelector(b[0],a)?[b[0]]:[]:d.find.matches(a,b)},dir:function(a,c,e){var f=[],g=a[c];while(g&&g.nodeType!==9&&(e===b||g.nodeType!==1||!d(g).is(e)))g.nodeType===1&&f.push(g),g=g[c];return f},nth:function(a,b,c,d){b=b||1;var e=0;for(;a;a=a[c])if(a.nodeType===1&&++e===b)break;return a},sibling:function(a,b){var c=[];for(;a;a=a.nextSibling)a.nodeType===1&&a!==b&&c.push(a);return c}});var P=/ jQuery\d+="(?:\d+|null)"/g,Q=/^\s+/,R=/<(?!area|br|col|embed|hr|img|input|link|meta|param)(([\w:]+)[^>]*)\/>/ig,S=/<([\w:]+)/,T=/<tbody/i,U=/<|&#?\w+;/,V=/<(?:script|object|embed|option|style)/i,W=/checked\s*(?:[^=]|=\s*.checked.)/i,X={option:[1,"<select multiple='multiple'>","</select>"],legend:[1,"<fieldset>","</fieldset>"],thead:[1,"<table>","</table>"],tr:[2,"<table><tbody>","</tbody></table>"],td:[3,"<table><tbody><tr>","</tr></tbody></table>"],col:[2,"<table><tbody></tbody><colgroup>","</colgroup></table>"],area:[1,"<map>","</map>"],_default:[0,"",""]};X.optgroup=X.option,X.tbody=X.tfoot=X.colgroup=X.caption=X.thead,X.th=X.td,d.support.htmlSerialize||(X._default=[1,"div<div>","</div>"]),d.fn.extend({text:function(a){if(d.isFunction(a))return this.each(function(b){var c=d(this);c.text(a.call(this,b,c.text()))});if(typeof a!=="object"&&a!==b)return this.empty().append((this[0]&&this[0].ownerDocument||c).createTextNode(a));return d.text(this)},wrapAll:function(a){if(d.isFunction(a))return this.each(function(b){d(this).wrapAll(a.call(this,b))});if(this[0]){var b=d(a,this[0].ownerDocument).eq(0).clone(!0);this[0].parentNode&&b.insertBefore(this[0]),b.map(function(){var a=this;while(a.firstChild&&a.firstChild.nodeType===1)a=a.firstChild;return a}).append(this)}return this},wrapInner:function(a){if(d.isFunction(a))return this.each(function(b){d(this).wrapInner(a.call(this,b))});return this.each(function(){var b=d(this),c=b.contents();c.length?c.wrapAll(a):b.append(a)})},wrap:function(a){return this.each(function(){d(this).wrapAll(a)})},unwrap:function(){return this.parent().each(function(){d.nodeName(this,"body")||d(this).replaceWith(this.childNodes)}).end()},append:function(){return this.domManip(arguments,!0,function(a){this.nodeType===1&&this.appendChild(a)})},prepend:function(){return this.domManip(arguments,!0,function(a){this.nodeType===1&&this.insertBefore(a,this.firstChild)})},before:function(){if(this[0]&&this[0].parentNode)return this.domManip(arguments,!1,function(a){this.parentNode.insertBefore(a,this)});if(arguments.length){var a=d(arguments[0]);a.push.apply(a,this.toArray());return this.pushStack(a,"before",arguments)}},after:function(){if(this[0]&&this[0].parentNode)return this.domManip(arguments,!1,function(a){this.parentNode.insertBefore(a,this.nextSibling)});if(arguments.length){var a=this.pushStack(this,"after",arguments);a.push.apply(a,d(arguments[0]).toArray());return a}},remove:function(a,b){for(var c=0,e;(e=this[c])!=null;c++)if(!a||d.filter(a,[e]).length)!b&&e.nodeType===1&&(d.cleanData(e.getElementsByTagName("*")),d.cleanData([e])),e.parentNode&&e.parentNode.removeChild(e);return this},empty:function(){for(var a=0,b;(b=this[a])!=null;a++){b.nodeType===1&&d.cleanData(b.getElementsByTagName("*"));while(b.firstChild)b.removeChild(b.firstChild)}return this},clone:function(a,b){a=a==null?!1:a,b=b==null?a:b;return this.map(function(){return d.clone(this,a,b)})},html:function(a){if(a===b)return this[0]&&this[0].nodeType===1?this[0].innerHTML.replace(P,""):null;if(typeof a!=="string"||V.test(a)||!d.support.leadingWhitespace&&Q.test(a)||X[(S.exec(a)||["",""])[1].toLowerCase()])d.isFunction(a)?this.each(function(b){var c=d(this);c.html(a.call(this,b,c.html()))}):this.empty().append(a);else{a=a.replace(R,"<$1></$2>");try{for(var c=0,e=this.length;c<e;c++)this[c].nodeType===1&&(d.cleanData(this[c].getElementsByTagName("*")),this[c].innerHTML=a)}catch(f){this.empty().append(a)}}return this},replaceWith:function(a){if(this[0]&&this[0].parentNode){if(d.isFunction(a))return this.each(function(b){var c=d(this),e=c.html();c.replaceWith(a.call(this,b,e))});typeof a!=="string"&&(a=d(a).detach());return this.each(function(){var b=this.nextSibling,c=this.parentNode;d(this).remove(),b?d(b).before(a):d(c).append(a)})}return this.pushStack(d(d.isFunction(a)?a():a),"replaceWith",a)},detach:function(a){return this.remove(a,!0)},domManip:function(a,c,e){var f,g,h,i,j=a[0],k=[];if(!d.support.checkClone&&arguments.length===3&&typeof j==="string"&&W.test(j))return this.each(function(){d(this).domManip(a,c,e,!0)});if(d.isFunction(j))return this.each(function(f){var g=d(this);a[0]=j.call(this,f,c?g.html():b),g.domManip(a,c,e)});if(this[0]){i=j&&j.parentNode,d.support.parentNode&&i&&i.nodeType===11&&i.childNodes.length===this.length?f={fragment:i}:f=d.buildFragment(a,this,k),h=f.fragment,h.childNodes.length===1?g=h=h.firstChild:g=h.firstChild;if(g){c=c&&d.nodeName(g,"tr");for(var l=0,m=this.length,n=m-1;l<m;l++)e.call(c?Y(this[l],g):this[l],f.cacheable||m>1&&l<n?d.clone(h,!0,!0):h)}k.length&&d.each(k,ba)}return this}}),d.buildFragment=function(a,b,e){var f,g,h,i=b&&b[0]?b[0].ownerDocument||b[0]:c;a.length===1&&typeof a[0]==="string"&&a[0].length<512&&i===c&&a[0].charAt(0)==="<"&&!V.test(a[0])&&(d.support.checkClone||!W.test(a[0]))&&(g=!0,h=d.fragments[a[0]],h&&(h!==1&&(f=h))),f||(f=i.createDocumentFragment(),d.clean(a,i,f,e)),g&&(d.fragments[a[0]]=h?f:1);return{fragment:f,cacheable:g}},d.fragments={},d.each({appendTo:"append",prependTo:"prepend",insertBefore:"before",insertAfter:"after",replaceAll:"replaceWith"},function(a,b){d.fn[a]=function(c){var e=[],f=d(c),g=this.length===1&&this[0].parentNode;if(g&&g.nodeType===11&&g.childNodes.length===1&&f.length===1){f[b](this[0]);return this}for(var h=0,i=f.length;h<i;h++){var j=(h>0?this.clone(!0):this).get();d(f[h])[b](j),e=e.concat(j)}return this.pushStack(e,a,f.selector)}}),d.extend({clone:function(a,b,c){var e=a.cloneNode(!0),f,g,h;if((!d.support.noCloneEvent||!d.support.noCloneChecked)&&(a.nodeType===1||a.nodeType===11)&&!d.isXMLDoc(a)){$(a,e),f=_(a),g=_(e);for(h=0;f[h];++h)$(f[h],g[h])}if(b){Z(a,e);if(c){f=_(a),g=_(e);for(h=0;f[h];++h)Z(f[h],g[h])}}return e},clean:function(a,b,e,f){b=b||c,typeof b.createElement==="undefined"&&(b=b.ownerDocument||b[0]&&b[0].ownerDocument||c);var g=[];for(var h=0,i;(i=a[h])!=null;h++){typeof i==="number"&&(i+="");if(!i)continue;if(typeof i!=="string"||U.test(i)){if(typeof i==="string"){i=i.replace(R,"<$1></$2>");var j=(S.exec(i)||["",""])[1].toLowerCase(),k=X[j]||X._default,l=k[0],m=b.createElement("div");m.innerHTML=k[1]+i+k[2];while(l--)m=m.lastChild;if(!d.support.tbody){var n=T.test(i),o=j==="table"&&!n?m.firstChild&&m.firstChild.childNodes:k[1]==="<table>"&&!n?m.childNodes:[];for(var p=o.length-1;p>=0;--p)d.nodeName(o[p],"tbody")&&!o[p].childNodes.length&&o[p].parentNode.removeChild(o[p])}!d.support.leadingWhitespace&&Q.test(i)&&m.insertBefore(b.createTextNode(Q.exec(i)[0]),m.firstChild),i=m.childNodes}}else i=b.createTextNode(i);i.nodeType?g.push(i):g=d.merge(g,i)}if(e)for(h=0;g[h];h++)!f||!d.nodeName(g[h],"script")||g[h].type&&g[h].type.toLowerCase()!=="text/javascript"?(g[h].nodeType===1&&g.splice.apply(g,[h+1,0].concat(d.makeArray(g[h].getElementsByTagName("script")))),e.appendChild(g[h])):f.push(g[h].parentNode?g[h].parentNode.removeChild(g[h]):g[h]);return g},cleanData:function(a){var b,c,e=d.cache,f=d.expando,g=d.event.special,h=d.support.deleteExpando;for(var i=0,j;(j=a[i])!=null;i++){if(j.nodeName&&d.noData[j.nodeName.toLowerCase()])continue;c=j[d.expando];if(c){b=e[c]&&e[c][f];if(b&&b.events){for(var k in b.events)g[k]?d.event.remove(j,k):d.removeEvent(j,k,b.handle);b.handle&&(b.handle.elem=null)}h?delete j[d.expando]:j.removeAttribute&&j.removeAttribute(d.expando),delete e[c]}}}});var bb=/alpha\([^)]*\)/i,bc=/opacity=([^)]*)/,bd=/-([a-z])/ig,be=/([A-Z])/g,bf=/^-?\d+(?:px)?$/i,bg=/^-?\d/,bh={position:"absolute",visibility:"hidden",display:"block"},bi=["Left","Right"],bj=["Top","Bottom"],bk,bl,bm,bn=function(a,b){return b.toUpperCase()};d.fn.css=function(a,c){if(arguments.length===2&&c===b)return this;return d.access(this,a,c,!0,function(a,c,e){return e!==b?d.style(a,c,e):d.css(a,c)})},d.extend({cssHooks:{opacity:{get:function(a,b){if(b){var c=bk(a,"opacity","opacity");return c===""?"1":c}return a.style.opacity}}},cssNumber:{zIndex:!0,fontWeight:!0,opacity:!0,zoom:!0,lineHeight:!0},cssProps:{"float":d.support.cssFloat?"cssFloat":"styleFloat"},style:function(a,c,e,f){if(a&&a.nodeType!==3&&a.nodeType!==8&&a.style){var g,h=d.camelCase(c),i=a.style,j=d.cssHooks[h];c=d.cssProps[h]||h;if(e===b){if(j&&"get"in j&&(g=j.get(a,!1,f))!==b)return g;return i[c]}if(typeof e==="number"&&isNaN(e)||e==null)return;typeof e==="number"&&!d.cssNumber[h]&&(e+="px");if(!j||!("set"in j)||(e=j.set(a,e))!==b)try{i[c]=e}catch(k){}}},css:function(a,c,e){var f,g=d.camelCase(c),h=d.cssHooks[g];c=d.cssProps[g]||g;if(h&&"get"in h&&(f=h.get(a,!0,e))!==b)return f;if(bk)return bk(a,c,g)},swap:function(a,b,c){var d={};for(var e in b)d[e]=a.style[e],a.style[e]=b[e];c.call(a);for(e in b)a.style[e]=d[e]},camelCase:function(a){return a.replace(bd,bn)}}),d.curCSS=d.css,d.each(["height","width"],function(a,b){d.cssHooks[b]={get:function(a,c,e){var f;if(c){a.offsetWidth!==0?f=bo(a,b,e):d.swap(a,bh,function(){f=bo(a,b,e)});if(f<=0){f=bk(a,b,b),f==="0px"&&bm&&(f=bm(a,b,b));if(f!=null)return f===""||f==="auto"?"0px":f}if(f<0||f==null){f=a.style[b];return f===""||f==="auto"?"0px":f}return typeof f==="string"?f:f+"px"}},set:function(a,b){if(!bf.test(b))return b;b=parseFloat(b);if(b>=0)return b+"px"}}}),d.support.opacity||(d.cssHooks.opacity={get:function(a,b){return bc.test((b&&a.currentStyle?a.currentStyle.filter:a.style.filter)||"")?parseFloat(RegExp.$1)/100+"":b?"1":""},set:function(a,b){var c=a.style;c.zoom=1;var e=d.isNaN(b)?"":"alpha(opacity="+b*100+")",f=c.filter||"";c.filter=bb.test(f)?f.replace(bb,e):c.filter+" "+e}}),c.defaultView&&c.defaultView.getComputedStyle&&(bl=function(a,c,e){var f,g,h;e=e.replace(be,"-$1").toLowerCase();if(!(g=a.ownerDocument.defaultView))return b;if(h=g.getComputedStyle(a,null))f=h.getPropertyValue(e),f===""&&!d.contains(a.ownerDocument.documentElement,a)&&(f=d.style(a,e));return f}),c.documentElement.currentStyle&&(bm=function(a,b){var c,d=a.currentStyle&&a.currentStyle[b],e=a.runtimeStyle&&a.runtimeStyle[b],f=a.style;!bf.test(d)&&bg.test(d)&&(c=f.left,e&&(a.runtimeStyle.left=a.currentStyle.left),f.left=b==="fontSize"?"1em":d||0,d=f.pixelLeft+"px",f.left=c,e&&(a.runtimeStyle.left=e));return d===""?"auto":d}),bk=bl||bm,d.expr&&d.expr.filters&&(d.expr.filters.hidden=function(a){var b=a.offsetWidth,c=a.offsetHeight;return b===0&&c===0||!d.support.reliableHiddenOffsets&&(a.style.display||d.css(a,"display"))==="none"},d.expr.filters.visible=function(a){return!d.expr.filters.hidden(a)});var bp=/%20/g,bq=/\[\]$/,br=/\r?\n/g,bs=/#.*$/,bt=/^(.*?):[ \t]*([^\r\n]*)\r?$/mg,bu=/^(?:color|date|datetime|email|hidden|month|number|password|range|search|tel|text|time|url|week)$/i,bv=/(?:^file|^widget|\-extension):$/,bw=/^(?:GET|HEAD)$/,bx=/^\/\//,by=/\?/,bz=/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi,bA=/^(?:select|textarea)/i,bB=/\s+/,bC=/([?&])_=[^&]*/,bD=/(^|\-)([a-z])/g,bE=function(a,b,c){return b+c.toUpperCase()},bF=/^([\w\+\.\-]+:)\/\/([^\/?#:]*)(?::(\d+))?/,bG=d.fn.load,bH={},bI={},bJ,bK;try{bJ=c.location.href}catch(bL){bJ=c.createElement("a"),bJ.href="",bJ=bJ.href}bK=bF.exec(bJ.toLowerCase()),d.fn.extend({load:function(a,c,e){if(typeof a!=="string"&&bG)return bG.apply(this,arguments);if(!this.length)return this;var f=a.indexOf(" ");if(f>=0){var g=a.slice(f,a.length);a=a.slice(0,f)}var h="GET";c&&(d.isFunction(c)?(e=c,c=b):typeof c==="object"&&(c=d.param(c,d.ajaxSettings.traditional),h="POST"));var i=this;d.ajax({url:a,type:h,dataType:"html",data:c,complete:function(a,b,c){c=a.responseText,a.isResolved()&&(a.done(function(a){c=a}),i.html(g?d("<div>").append(c.replace(bz,"")).find(g):c)),e&&i.each(e,[c,b,a])}});return this},serialize:function(){return d.param(this.serializeArray())},serializeArray:function(){return this.map(function(){return this.elements?d.makeArray(this.elements):this}).filter(function(){return this.name&&!this.disabled&&(this.checked||bA.test(this.nodeName)||bu.test(this.type))}).map(function(a,b){var c=d(this).val();return c==null?null:d.isArray(c)?d.map(c,function(a,c){return{name:b.name,value:a.replace(br,"\r\n")}}):{name:b.name,value:c.replace(br,"\r\n")}}).get()}}),d.each("ajaxStart ajaxStop ajaxComplete ajaxError ajaxSuccess ajaxSend".split(" "),function(a,b){d.fn[b]=function(a){return this.bind(b,a)}}),d.each(["get","post"],function(a,c){d[c]=function(a,e,f,g){d.isFunction(e)&&(g=g||f,f=e,e=b);return d.ajax({type:c,url:a,data:e,success:f,dataType:g})}}),d.extend({getScript:function(a,c){return d.get(a,b,c,"script")},getJSON:function(a,b,c){return d.get(a,b,c,"json")},ajaxSetup:function(a,b){b?d.extend(!0,a,d.ajaxSettings,b):(b=a,a=d.extend(!0,d.ajaxSettings,b));for(var c in {context:1,url:1})c in b?a[c]=b[c]:c in d.ajaxSettings&&(a[c]=d.ajaxSettings[c]);return a},ajaxSettings:{url:bJ,isLocal:bv.test(bK[1]),global:!0,type:"GET",contentType:"application/x-www-form-urlencoded",processData:!0,async:!0,accepts:{xml:"application/xml, text/xml",html:"text/html",text:"text/plain",json:"application/json, text/javascript","*":"*/*"},contents:{xml:/xml/,html:/html/,json:/json/},responseFields:{xml:"responseXML",text:"responseText"},converters:{"* text":a.String,"text html":!0,"text json":d.parseJSON,"text xml":d.parseXML}},ajaxPrefilter:bM(bH),ajaxTransport:bM(bI),ajax:function(a,c){function v(a,c,l,n){if(r!==2){r=2,p&&clearTimeout(p),o=b,m=n||"",u.readyState=a?4:0;var q,t,v,w=l?bP(e,u,l):b,x,y;if(a>=200&&a<300||a===304){if(e.ifModified){if(x=u.getResponseHeader("Last-Modified"))d.lastModified[k]=x;if(y=u.getResponseHeader("Etag"))d.etag[k]=y}if(a===304)c="notmodified",q=!0;else try{t=bQ(e,w),c="success",q=!0}catch(z){c="parsererror",v=z}}else{v=c;if(!c||a)c="error",a<0&&(a=0)}u.status=a,u.statusText=c,q?h.resolveWith(f,[t,c,u]):h.rejectWith(f,[u,c,v]),u.statusCode(j),j=b,s&&g.trigger("ajax"+(q?"Success":"Error"),[u,e,q?t:v]),i.resolveWith(f,[u,c]),s&&(g.trigger("ajaxComplete",[u,e]),--d.active||d.event.trigger("ajaxStop"))}}typeof a==="object"&&(c=a,a=b),c=c||{};var e=d.ajaxSetup({},c),f=e.context||e,g=f!==e&&(f.nodeType||f instanceof d)?d(f):d.event,h=d.Deferred(),i=d._Deferred(),j=e.statusCode||{},k,l={},m,n,o,p,q,r=0,s,t,u={readyState:0,setRequestHeader:function(a,b){r||(l[a.toLowerCase().replace(bD,bE)]=b);return this},getAllResponseHeaders:function(){return r===2?m:null},getResponseHeader:function(a){var c;if(r===2){if(!n){n={};while(c=bt.exec(m))n[c[1].toLowerCase()]=c[2]}c=n[a.toLowerCase()]}return c===b?null:c},overrideMimeType:function(a){r||(e.mimeType=a);return this},abort:function(a){a=a||"abort",o&&o.abort(a),v(0,a);return this}};h.promise(u),u.success=u.done,u.error=u.fail,u.complete=i.done,u.statusCode=function(a){if(a){var b;if(r<2)for(b in a)j[b]=[j[b],a[b]];else b=a[u.status],u.then(b,b)}return this},e.url=((a||e.url)+"").replace(bs,"").replace(bx,bK[1]+"//"),e.dataTypes=d.trim(e.dataType||"*").toLowerCase().split(bB),e.crossDomain||(q=bF.exec(e.url.toLowerCase()),e.crossDomain=q&&(q[1]!=bK[1]||q[2]!=bK[2]||(q[3]||(q[1]==="http:"?80:443))!=(bK[3]||(bK[1]==="http:"?80:443)))),e.data&&e.processData&&typeof e.data!=="string"&&(e.data=d.param(e.data,e.traditional)),bN(bH,e,c,u);if(r===2)return!1;s=e.global,e.type=e.type.toUpperCase(),e.hasContent=!bw.test(e.type),s&&d.active++===0&&d.event.trigger("ajaxStart");if(!e.hasContent){e.data&&(e.url+=(by.test(e.url)?"&":"?")+e.data),k=e.url;if(e.cache===!1){var w=d.now(),x=e.url.replace(bC,"$1_="+w);e.url=x+(x===e.url?(by.test(e.url)?"&":"?")+"_="+w:"")}}if(e.data&&e.hasContent&&e.contentType!==!1||c.contentType)l["Content-Type"]=e.contentType;e.ifModified&&(k=k||e.url,d.lastModified[k]&&(l["If-Modified-Since"]=d.lastModified[k]),d.etag[k]&&(l["If-None-Match"]=d.etag[k])),l.Accept=e.dataTypes[0]&&e.accepts[e.dataTypes[0]]?e.accepts[e.dataTypes[0]]+(e.dataTypes[0]!=="*"?", */*; q=0.01":""):e.accepts["*"];for(t in e.headers)u.setRequestHeader(t,e.headers[t]);if(e.beforeSend&&(e.beforeSend.call(f,u,e)===!1||r===2)){u.abort();return!1}for(t in {success:1,error:1,complete:1})u[t](e[t]);o=bN(bI,e,c,u);if(o){u.readyState=1,s&&g.trigger("ajaxSend",[u,e]),e.async&&e.timeout>0&&(p=setTimeout(function(){u.abort("timeout")},e.timeout));try{r=1,o.send(l,v)}catch(y){status<2?v(-1,y):d.error(y)}}else v(-1,"No Transport");return u},param:function(a,c){var e=[],f=function(a,b){b=d.isFunction(b)?b():b,e[e.length]=encodeURIComponent(a)+"="+encodeURIComponent(b)};c===b&&(c=d.ajaxSettings.traditional);if(d.isArray(a)||a.jquery&&!d.isPlainObject(a))d.each(a,function(){f(this.name,this.value)});else for(var g in a)bO(g,a[g],c,f);return e.join("&").replace(bp,"+")}}),d.extend({active:0,lastModified:{},etag:{}});var bR=d.now(),bS=/(\=)\?(&|$)|()\?\?()/i;d.ajaxSetup({jsonp:"callback",jsonpCallback:function(){return d.expando+"_"+bR++}}),d.ajaxPrefilter("json jsonp",function(b,c,e){var f=typeof b.data==="string";if(b.dataTypes[0]==="jsonp"||c.jsonpCallback||c.jsonp!=null||b.jsonp!==!1&&(bS.test(b.url)||f&&bS.test(b.data))){var g,h=b.jsonpCallback=d.isFunction(b.jsonpCallback)?b.jsonpCallback():b.jsonpCallback,i=a[h],j=b.url,k=b.data,l="$1"+h+"$2",m=function(){a[h]=i,g&&d.isFunction(i)&&a[h](g[0])};b.jsonp!==!1&&(j=j.replace(bS,l),b.url===j&&(f&&(k=k.replace(bS,l)),b.data===k&&(j+=(/\?/.test(j)?"&":"?")+b.jsonp+"="+h))),b.url=j,b.data=k,a[h]=function(a){g=[a]},e.then(m,m),b.converters["script json"]=function(){g||d.error(h+" was not called");return g[0]},b.dataTypes[0]="json";return"script"}}),d.ajaxSetup({accepts:{script:"text/javascript, application/javascript, application/ecmascript, application/x-ecmascript"},contents:{script:/javascript|ecmascript/},converters:{"text script":function(a){d.globalEval(a);return a}}}),d.ajaxPrefilter("script",function(a){a.cache===b&&(a.cache=!1),a.crossDomain&&(a.type="GET",a.global=!1)}),d.ajaxTransport("script",function(a){if(a.crossDomain){var d,e=c.head||c.getElementsByTagName("head")[0]||c.documentElement;return{send:function(f,g){d=c.createElement("script"),d.async="async",a.scriptCharset&&(d.charset=a.scriptCharset),d.src=a.url,d.onload=d.onreadystatechange=function(a,c){if(!d.readyState||/loaded|complete/.test(d.readyState))d.onload=d.onreadystatechange=null,e&&d.parentNode&&e.removeChild(d),d=b,c||g(200,"success")},e.insertBefore(d,e.firstChild)},abort:function(){d&&d.onload(0,1)}}}});var bT=d.now(),bU,bV;d.ajaxSettings.xhr=a.ActiveXObject?function(){return!this.isLocal&&bX()||bY()}:bX,bV=d.ajaxSettings.xhr(),d.support.ajax=!!bV,d.support.cors=bV&&"withCredentials"in bV,bV=b,d.support.ajax&&d.ajaxTransport(function(a){if(!a.crossDomain||d.support.cors){var c;return{send:function(e,f){var g=a.xhr(),h,i;a.username?g.open(a.type,a.url,a.async,a.username,a.password):g.open(a.type,a.url,a.async);if(a.xhrFields)for(i in a.xhrFields)g[i]=a.xhrFields[i];a.mimeType&&g.overrideMimeType&&g.overrideMimeType(a.mimeType),(!a.crossDomain||a.hasContent)&&!e["X-Requested-With"]&&(e["X-Requested-With"]="XMLHttpRequest");try{for(i in e)g.setRequestHeader(i,e[i])}catch(j){}g.send(a.hasContent&&a.data||null),c=function(e,i){var j,k,l,m,n;try{if(c&&(i||g.readyState===4)){c=b,h&&(g.onreadystatechange=d.noop,delete bU[h]);if(i)g.readyState!==4&&g.abort();else{j=g.status,l=g.getAllResponseHeaders(),m={},n=g.responseXML,n&&n.documentElement&&(m.xml=n),m.text=g.responseText;try{k=g.statusText}catch(o){k=""}j||!a.isLocal||a.crossDomain?j===1223&&(j=204):j=m.text?200:404}}}catch(p){i||f(-1,p)}m&&f(j,k,m,l)},a.async&&g.readyState!==4?(bU||(bU={},bW()),h=bT++,g.onreadystatechange=bU[h]=c):c()},abort:function(){c&&c(0,1)}}}});var bZ={},b$=/^(?:toggle|show|hide)$/,b_=/^([+\-]=)?([\d+.\-]+)([a-z%]*)$/i,ca,cb=[["height","marginTop","marginBottom","paddingTop","paddingBottom"],["width","marginLeft","marginRight","paddingLeft","paddingRight"],["opacity"]];d.fn.extend({show:function(a,b,c){var e,f;if(a||a===0)return this.animate(cc("show",3),a,b,c);for(var g=0,h=this.length;g<h;g++)e=this[g],f=e.style.display,!d._data(e,"olddisplay")&&f==="none"&&(f=e.style.display=""),f===""&&d.css(e,"display")==="none"&&d._data(e,"olddisplay",cd(e.nodeName));for(g=0;g<h;g++){e=this[g],f=e.style.display;if(f===""||f==="none")e.style.display=d._data(e,"olddisplay")||""}return this},hide:function(a,b,c){if(a||a===0)return this.animate(cc("hide",3),a,b,c);for(var e=0,f=this.length;e<f;e++){var g=d.css(this[e],"display");g!=="none"&&!d._data(this[e],"olddisplay")&&d._data(this[e],"olddisplay",g)}for(e=0;e<f;e++)this[e].style.display="none";return this},_toggle:d.fn.toggle,toggle:function(a,b,c){var e=typeof a==="boolean";d.isFunction(a)&&d.isFunction(b)?this._toggle.apply(this,arguments):a==null||e?this.each(function(){var b=e?a:d(this).is(":hidden");d(this)[b?"show":"hide"]()}):this.animate(cc("toggle",3),a,b,c);return this},fadeTo:function(a,b,c,d){return this.filter(":hidden").css("opacity",0).show().end().animate({opacity:b},a,c,d)},animate:function(a,b,c,e){var f=d.speed(b,c,e);if(d.isEmptyObject(a))return this.each(f.complete);return this[f.queue===!1?"each":"queue"](function(){var b=d.extend({},f),c,e=this.nodeType===1,g=e&&d(this).is(":hidden"),h=this;for(c in a){var i=d.camelCase(c);c!==i&&(a[i]=a[c],delete a[c],c=i);if(a[c]==="hide"&&g||a[c]==="show"&&!g)return b.complete.call(this);if(e&&(c==="height"||c==="width")){b.overflow=[this.style.overflow,this.style.overflowX,this.style.overflowY];if(d.css(this,"display")==="inline"&&d.css(this,"float")==="none")if(d.support.inlineBlockNeedsLayout){var j=cd(this.nodeName);j==="inline"?this.style.display="inline-block":(this.style.display="inline",this.style.zoom=1)}else this.style.display="inline-block"}d.isArray(a[c])&&((b.specialEasing=b.specialEasing||{})[c]=a[c][1],a[c]=a[c][0])}b.overflow!=null&&(this.style.overflow="hidden"),b.curAnim=d.extend({},a),d.each(a,function(c,e){var f=new d.fx(h,b,c);if(b$.test(e))f[e==="toggle"?g?"show":"hide":e](a);else{var i=b_.exec(e),j=f.cur();if(i){var k=parseFloat(i[2]),l=i[3]||(d.cssNumber[c]?"":"px");l!=="px"&&(d.style(h,c,(k||1)+l),j=(k||1)/f.cur()*j,d.style(h,c,j+l)),i[1]&&(k=(i[1]==="-="?-1:1)*k+j),f.custom(j,k,l)}else f.custom(j,e,"")}});return!0})},stop:function(a,b){var c=d.timers;a&&this.queue([]),this.each(function(){for(var a=c.length-1;a>=0;a--)c[a].elem===this&&(b&&c[a](!0),c.splice(a,1))}),b||this.dequeue();return this}}),d.each({slideDown:cc("show",1),slideUp:cc("hide",1),slideToggle:cc("toggle",1),fadeIn:{opacity:"show"},fadeOut:{opacity:"hide"},fadeToggle:{opacity:"toggle"}},function(a,b){d.fn[a]=function(a,c,d){return this.animate(b,a,c,d)}}),d.extend({speed:function(a,b,c){var e=a&&typeof a==="object"?d.extend({},a):{complete:c||!c&&b||d.isFunction(a)&&a,duration:a,easing:c&&b||b&&!d.isFunction(b)&&b};e.duration=d.fx.off?0:typeof e.duration==="number"?e.duration:e.duration in d.fx.speeds?d.fx.speeds[e.duration]:d.fx.speeds._default,e.old=e.complete,e.complete=function(){e.queue!==!1&&d(this).dequeue(),d.isFunction(e.old)&&e.old.call(this)};return e},easing:{linear:function(a,b,c,d){return c+d*a},swing:function(a,b,c,d){return(-Math.cos(a*Math.PI)/2+.5)*d+c}},timers:[],fx:function(a,b,c){this.options=b,this.elem=a,this.prop=c,b.orig||(b.orig={})}}),d.fx.prototype={update:function(){this.options.step&&this.options.step.call(this.elem,this.now,this),(d.fx.step[this.prop]||d.fx.step._default)(this)},cur:function(){if(this.elem[this.prop]!=null&&(!this.elem.style||this.elem.style[this.prop]==null))return this.elem[this.prop];var a,b=d.css(this.elem,this.prop);return isNaN(a=parseFloat(b))?!b||b==="auto"?0:b:a},custom:function(a,b,c){function g(a){return e.step(a)}var e=this,f=d.fx;this.startTime=d.now(),this.start=a,this.end=b,this.unit=c||this.unit||(d.cssNumber[this.prop]?"":"px"),this.now=this.start,this.pos=this.state=0,g.elem=this.elem,g()&&d.timers.push(g)&&!ca&&(ca=setInterval(f.tick,f.interval))},show:function(){this.options.orig[this.prop]=d.style(this.elem,this.prop),this.options.show=!0,this.custom(this.prop==="width"||this.prop==="height"?1:0,this.cur()),d(this.elem).show()},hide:function(){this.options.orig[this.prop]=d.style(this.elem,this.prop),this.options.hide=!0,this.custom(this.cur(),0)},step:function(a){var b=d.now(),c=!0;if(a||b>=this.options.duration+this.startTime){this.now=this.end,this.pos=this.state=1,this.update(),this.options.curAnim[this.prop]=!0;for(var e in this.options.curAnim)this.options.curAnim[e]!==!0&&(c=!1);if(c){if(this.options.overflow!=null&&!d.support.shrinkWrapBlocks){var f=this.elem,g=this.options;d.each(["","X","Y"],function(a,b){f.style["overflow"+b]=g.overflow[a]})}this.options.hide&&d(this.elem).hide();if(this.options.hide||this.options.show)for(var h in this.options.curAnim)d.style(this.elem,h,this.options.orig[h]);this.options.complete.call(this.elem)}return!1}var i=b-this.startTime;this.state=i/this.options.duration;var j=this.options.specialEasing&&this.options.specialEasing[this.prop],k=this.options.easing||(d.easing.swing?"swing":"linear");this.pos=d.easing[j||k](this.state,i,0,1,this.options.duration),this.now=this.start+(this.end-this.start)*this.pos,this.update();return!0}},d.extend(d.fx,{tick:function(){var a=d.timers;for(var b=0;b<a.length;b++)a[b]()||a.splice(b--,1);a.length||d.fx.stop()},interval:13,stop:function(){clearInterval(ca),ca=null},speeds:{slow:600,fast:200,_default:400},step:{opacity:function(a){d.style(a.elem,"opacity",a.now)},_default:function(a){a.elem.style&&a.elem.style[a.prop]!=null?a.elem.style[a.prop]=(a.prop==="width"||a.prop==="height"?Math.max(0,a.now):a.now)+a.unit:a.elem[a.prop]=a.now}}}),d.expr&&d.expr.filters&&(d.expr.filters.animated=function(a){return d.grep(d.timers,function(b){return a===b.elem}).length});var ce=/^t(?:able|d|h)$/i,cf=/^(?:body|html)$/i;"getBoundingClientRect"in c.documentElement?d.fn.offset=function(a){var b=this[0],c;if(a)return this.each(function(b){d.offset.setOffset(this,a,b)});if(!b||!b.ownerDocument)return null;if(b===b.ownerDocument.body)return d.offset.bodyOffset(b);try{c=b.getBoundingClientRect()}catch(e){}var f=b.ownerDocument,g=f.documentElement;if(!c||!d.contains(g,b))return c?{top:c.top,left:c.left}:{top:0,left:0};var h=f.body,i=cg(f),j=g.clientTop||h.clientTop||0,k=g.clientLeft||h.clientLeft||0,l=i.pageYOffset||d.support.boxModel&&g.scrollTop||h.scrollTop,m=i.pageXOffset||d.support.boxModel&&g.scrollLeft||h.scrollLeft,n=c.top+l-j,o=c.left+m-k;return{top:n,left:o}}:d.fn.offset=function(a){var b=this[0];if(a)return this.each(function(b){d.offset.setOffset(this,a,b)});if(!b||!b.ownerDocument)return null;if(b===b.ownerDocument.body)return d.offset.bodyOffset(b);d.offset.initialize();var c,e=b.offsetParent,f=b,g=b.ownerDocument,h=g.documentElement,i=g.body,j=g.defaultView,k=j?j.getComputedStyle(b,null):b.currentStyle,l=b.offsetTop,m=b.offsetLeft;while((b=b.parentNode)&&b!==i&&b!==h){if(d.offset.supportsFixedPosition&&k.position==="fixed")break;c=j?j.getComputedStyle(b,null):b.currentStyle,l-=b.scrollTop,m-=b.scrollLeft,b===e&&(l+=b.offsetTop,m+=b.offsetLeft,d.offset.doesNotAddBorder&&(!d.offset.doesAddBorderForTableAndCells||!ce.test(b.nodeName))&&(l+=parseFloat(c.borderTopWidth)||0,m+=parseFloat(c.borderLeftWidth)||0),f=e,e=b.offsetParent),d.offset.subtractsBorderForOverflowNotVisible&&c.overflow!=="visible"&&(l+=parseFloat(c.borderTopWidth)||0,m+=parseFloat(c.borderLeftWidth)||0),k=c}if(k.position==="relative"||k.position==="static")l+=i.offsetTop,m+=i.offsetLeft;d.offset.supportsFixedPosition&&k.position==="fixed"&&(l+=Math.max(h.scrollTop,i.scrollTop),m+=Math.max(h.scrollLeft,i.scrollLeft));return{top:l,left:m}},d.offset={initialize:function(){var a=c.body,b=c.createElement("div"),e,f,g,h,i=parseFloat(d.css(a,"marginTop"))||0,j="<div style='position:absolute;top:0;left:0;margin:0;border:5px solid #000;padding:0;width:1px;height:1px;'><div></div></div><table style='position:absolute;top:0;left:0;margin:0;border:5px solid #000;padding:0;width:1px;height:1px;' cellpadding='0' cellspacing='0'><tr><td></td></tr></table>";d.extend(b.style,{position:"absolute",top:0,left:0,margin:0,border:0,width:"1px",height:"1px",visibility:"hidden"}),b.innerHTML=j,a.insertBefore(b,a.firstChild),e=b.firstChild,f=e.firstChild,h=e.nextSibling.firstChild.firstChild,this.doesNotAddBorder=f.offsetTop!==5,this.doesAddBorderForTableAndCells=h.offsetTop===5,f.style.position="fixed",f.style.top="20px",this.supportsFixedPosition=f.offsetTop===20||f.offsetTop===15,f.style.position=f.style.top="",e.style.overflow="hidden",e.style.position="relative",this.subtractsBorderForOverflowNotVisible=f.offsetTop===-5,this.doesNotIncludeMarginInBodyOffset=a.offsetTop!==i,a.removeChild(b),a=b=e=f=g=h=null,d.offset.initialize=d.noop},bodyOffset:function(a){var b=a.offsetTop,c=a.offsetLeft;d.offset.initialize(),d.offset.doesNotIncludeMarginInBodyOffset&&(b+=parseFloat(d.css(a,"marginTop"))||0,c+=parseFloat(d.css(a,"marginLeft"))||0);return{top:b,left:c}},setOffset:function(a,b,c){var e=d.css(a,"position");e==="static"&&(a.style.position="relative");var f=d(a),g=f.offset(),h=d.css(a,"top"),i=d.css(a,"left"),j=e==="absolute"&&d.inArray("auto",[h,i])>-1,k={},l={},m,n;j&&(l=f.position()),m=j?l.top:parseInt(h,10)||0,n=j?l.left:parseInt(i,10)||0,d.isFunction(b)&&(b=b.call(a,c,g)),b.top!=null&&(k.top=b.top-g.top+m),b.left!=null&&(k.left=b.left-g.left+n),"using"in b?b.using.call(a,k):f.css(k)}},d.fn.extend({position:function(){if(!this[0])return null;var a=this[0],b=this.offsetParent(),c=this.offset(),e=cf.test(b[0].nodeName)?{top:0,left:0}:b.offset();c.top-=parseFloat(d.css(a,"marginTop"))||0,c.left-=parseFloat(d.css(a,"marginLeft"))||0,e.top+=parseFloat(d.css(b[0],"borderTopWidth"))||0,e.left+=parseFloat(d.css(b[0],"borderLeftWidth"))||0;return{top:c.top-e.top,left:c.left-e.left}},offsetParent:function(){return this.map(function(){var a=this.offsetParent||c.body;while(a&&(!cf.test(a.nodeName)&&d.css(a,"position")==="static"))a=a.offsetParent;return a})}}),d.each(["Left","Top"],function(a,c){var e="scroll"+c;d.fn[e]=function(c){var f=this[0],g;if(!f)return null;if(c!==b)return this.each(function(){g=cg(this),g?g.scrollTo(a?d(g).scrollLeft():c,a?c:d(g).scrollTop()):this[e]=c});g=cg(f);return g?"pageXOffset"in g?g[a?"pageYOffset":"pageXOffset"]:d.support.boxModel&&g.document.documentElement[e]||g.document.body[e]:f[e]}}),d.each(["Height","Width"],function(a,c){var e=c.toLowerCase();d.fn["inner"+c]=function(){return this[0]?parseFloat(d.css(this[0],e,"padding")):null},d.fn["outer"+c]=function(a){return this[0]?parseFloat(d.css(this[0],e,a?"margin":"border")):null},d.fn[e]=function(a){var f=this[0];if(!f)return a==null?null:this;if(d.isFunction(a))return this.each(function(b){var c=d(this);c[e](a.call(this,b,c[e]()))});if(d.isWindow(f)){var g=f.document.documentElement["client"+c];return f.document.compatMode==="CSS1Compat"&&g||f.document.body["client"+c]||g}if(f.nodeType===9)return Math.max(f.documentElement["client"+c],f.body["scroll"+c],f.documentElement["scroll"+c],f.body["offset"+c],f.documentElement["offset"+c]);if(a===b){var h=d.css(f,e),i=parseFloat(h);return d.isNaN(i)?h:i}return this.css(e,typeof a==="string"?a:a+"px")}}),a.jQuery=a.$=d})(window);
-
-(function() {
-	var baseUri = location.protocol + "//" + location.host;
-	var relativeUri = location.href.replace(/[^\/]*$/, '');
-	var moduleUri = relativeUri;
-	var moduleClosures = {};
-	var modules = {};
-	var loading = [];
-	var main;
-	
-	window.require = function require(moduleId) {
-		loadModuleSync(moduleId);
-		return getModule(moduleId).exports;
-	};
-	
-	
-	require.root = function(uri) {
-		if (!arguments.length) return moduleUri;
-		if (uri.slice(-1) != '/') uri += '/';
-		if (uri.charAt(0) == '/') moduleUri = baseUri + uri;
-		else if (uri.indexOf('://') == -1) moduleUri = relativeUri + uri;
-		else moduleUri = uri;
-	};
-	
-	require.run = function(moduleId) {
-		if (moduleClosures.hasOwnProperty(moduleId)) return getModule(moduleId).exports;
-		else loadModule(main = moduleId, '');
-	};
-	
-	require.addModuleClosure = function(moduleId, closure) {
-		moduleClosures[moduleId] = closure;
-	};
-	
-	
-	function getModule(moduleId) {
-		if (modules.hasOwnProperty(moduleId)) return modules[moduleId];
-		else if (moduleClosures.hasOwnProperty(moduleId)) return runModule(moduleId);
-		else throw new Error('Module "' + moduleId + '" does not exist.');
-	}
-	
-	function runModule(moduleId) {
-		var module = {
-			id: moduleId,
-			uri: moduleUri + moduleId + '.js',
-			exports: { extend: extend }
-		};
-		modules[moduleId] = module;
-		moduleClosures[moduleId].call(window, createRequire(moduleId), module.exports, module);
-		return module;
-	}
-	
-	function createRequire(currentModuleId) {
-		var require = function(moduleId) {
-			moduleId = resolveModuleId(moduleId, currentModuleId);
-			return getModule(moduleId).exports;
-		};
-		if (main) require.main = getModule(main);
-		return require;
-	}
-	
-	
-	function loadModule(moduleId, currentModuleId) {
-		moduleId = resolveModuleId(moduleId, currentModuleId);
-		if (moduleClosures.hasOwnProperty(moduleId)) return;
-		var file = moduleUri + moduleId + '.js';
-		
-		var xhr = window.XMLHttpRequest ? new XMLHttpRequest() : new ActiveXObject('Microsoft.XMLHTTP');
-		xhr.open('GET', file, true);
-		xhr.onreadystatechange = function() {
-			if (xhr.readyState === 4) {
-				var i = loading.indexOf(xhr);
-				if (i == -1) return;
-				loading.splice(i, 1);
-				if (xhr.status == 200) {
-					var code = xhr.responseText;
-					try {
-						moduleClosures[moduleId] = new Function('require', 'exports', 'module', code);
-					} catch(e) {
-						throw new e.constructor(e.message + ' in module:' + moduleId);
-					}
-					findRequired(code, moduleId);
-					
-					// if finished loading all dependencies start the run
-					if (!loading.length && main) require.run(main);
-				} else {
-					moduleError(moduleId, currentModuleId);
-				}
-			}
-		};
-
-		loading.push(xhr);
-		xhr.send(null);
-	}
-	
-	function loadModuleSync(moduleId, currentModuleId) {
-		moduleId = resolveModuleId(moduleId, currentModuleId);
-		if (moduleClosures.hasOwnProperty(moduleId)) return;
-		var file = moduleUri + moduleId + '.js';
-		
-		var xhr = window.XMLHttpRequest ? new XMLHttpRequest() : new ActiveXObject('Microsoft.XMLHTTP');
-		xhr.open('GET', file, false);
-		xhr.send(null);
-		var code = xhr.responseText;
-		moduleClosures[moduleId] = new Function('require', 'exports', 'module', code);
-		findRequired(code, moduleId, true);
-	}
-	
-	function findRequired(code, moduleId, sync) {
-		var match, requireRegex = /\brequire\(("|')(.+?)\1\)/g;
-		while (match = requireRegex.exec(code)) {
-			sync ? loadModuleSync(match[2], moduleId) : loadModule(match[2], moduleId);
-		}
-	}
-	
-	function resolveModuleId(moduleId, currentModuleId) {
-		if (moduleId.charAt(0) == '.') {
-			var path = currentModuleId.split('/');
-			var parts = moduleId.split('/');
-			path.pop();
-			if (moduleId.slice(0, 3) == '../') {
-				while (parts[0] == '..') {
-					if (!path.length) moduleError(moduleId, currentModuleId);
-					parts.shift();
-					path.pop();
-				}
-				return (path.length ? path.join('/') + '/' : '') + parts.join('/');
-			} else if (moduleId.slice(0, 2) == './') {
-				parts.shift();
-				return path.join('/') + '/' + parts.join('/');
-			}
-		}
-		return moduleId;
-	}
-	
-	function moduleError(moduleId, currentModuleId) {
-		var from = currentModuleId ? ' require()\'d from module "' + currentModuleId + '"' : '';
-		throw new Error('Could not load module "' + moduleId + '"' + from);
-	}
-	
-	function extend(source) {
-		for (var i = 0; i < arguments.length; i++) {
-			source = arguments[i];
-			for (var prop in source) {
-				if (source.hasOwnProperty(prop)) {
-					this[prop] = source[prop];
-				}
-			}
-		}
-		return this;
-	}
-	
-	function checkAutoRun() {
-		// call require.run automatically if declared in script tag
-		var scripts = document.getElementsByTagName('script');
-		var main;
-		for (var i = 0; i < scripts.length; i++) {
-			if (main = scripts[i].getAttribute('data-main')) {
-				if (scripts[i].hasAttribute('data-root')) {
-					require.root(scripts[i].getAttribute('data-root'));
-				} else {
-					var src = scripts[i].getAttribute('src');
-					require.root(src.replace(/[^\/]+$/, ''));
-				}
-				require.run(main);
-			}
-		}
-	}
-	
-	checkAutoRun();
-	
-})();
-
 
 var p = Date.parse;
 Date.CultureInfo={name:"en-US",englishName:"English (United States)",nativeName:"English (United States)",dayNames:["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"],abbreviatedDayNames:["Sun","Mon","Tue","Wed","Thu","Fri","Sat"],shortestDayNames:["Su","Mo","Tu","We","Th","Fr","Sa"],firstLetterDayNames:["S","M","T","W","T","F","S"],monthNames:["January","February","March","April","May","June","July","August","September","October","November","December"],abbreviatedMonthNames:["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],amDesignator:"AM",pmDesignator:"PM",firstDayOfWeek:0,twoDigitYearMax:2029,dateElementOrder:"mdy",formatPatterns:{shortDate:"M/d/yyyy",longDate:"dddd, MMMM dd, yyyy",shortTime:"h:mm tt",longTime:"h:mm:ss tt",fullDateTime:"dddd, MMMM dd, yyyy h:mm:ss tt",sortableDateTime:"yyyy-MM-ddTHH:mm:ss",universalSortableDateTime:"yyyy-MM-dd HH:mm:ssZ",rfc1123:"ddd, dd MMM yyyy HH:mm:ss GMT",monthDay:"MMMM dd",yearMonth:"MMMM, yyyy"},regexPatterns:{jan:/^jan(uary)?/i,feb:/^feb(ruary)?/i,mar:/^mar(ch)?/i,apr:/^apr(il)?/i,may:/^may/i,jun:/^jun(e)?/i,jul:/^jul(y)?/i,aug:/^aug(ust)?/i,sep:/^sep(t(ember)?)?/i,oct:/^oct(ober)?/i,nov:/^nov(ember)?/i,dec:/^dec(ember)?/i,sun:/^su(n(day)?)?/i,mon:/^mo(n(day)?)?/i,tue:/^tu(e(s(day)?)?)?/i,wed:/^we(d(nesday)?)?/i,thu:/^th(u(r(s(day)?)?)?)?/i,fri:/^fr(i(day)?)?/i,sat:/^sa(t(urday)?)?/i,future:/^next/i,past:/^last|past|prev(ious)?/i,add:/^(\+|aft(er)?|from|hence)/i,subtract:/^(\-|bef(ore)?|ago)/i,yesterday:/^yes(terday)?/i,today:/^t(od(ay)?)?/i,tomorrow:/^tom(orrow)?/i,now:/^n(ow)?/i,millisecond:/^ms|milli(second)?s?/i,second:/^sec(ond)?s?/i,minute:/^mn|min(ute)?s?/i,hour:/^h(our)?s?/i,week:/^w(eek)?s?/i,month:/^m(onth)?s?/i,day:/^d(ay)?s?/i,year:/^y(ear)?s?/i,shortMeridian:/^(a|p)/i,longMeridian:/^(a\.?m?\.?|p\.?m?\.?)/i,timezone:/^((e(s|d)t|c(s|d)t|m(s|d)t|p(s|d)t)|((gmt)?\s*(\+|\-)\s*\d\d\d\d?)|gmt|utc)/i,ordinalSuffix:/^\s*(st|nd|rd|th)/i,timeContext:/^\s*(\:|a(?!u|p)|p)/i},timezones:[{name:"UTC",offset:"-000"},{name:"GMT",offset:"-000"},{name:"EST",offset:"-0500"},{name:"EDT",offset:"-0400"},{name:"CST",offset:"-0600"},{name:"CDT",offset:"-0500"},{name:"MST",offset:"-0700"},{name:"MDT",offset:"-0600"},{name:"PST",offset:"-0800"},{name:"PDT",offset:"-0700"}]};
@@ -746,6 +729,22 @@ screens.bind('open:logout', function() {
 
 });
 
+require.addModuleClosure("screens/site", function(require, exports, module) {
+
+require('jstree');
+
+var view = $('#pages-screen');
+
+view.find('.sidebar').jstree({
+	animation: 0,
+	strings: { loading : "Loading ...", new_node : "New page" },
+	plugins: []
+});
+
+
+
+});
+
 require.addModuleClosure("cookie", function(require, exports, module) {
 
 var cookie = exports.extend({
@@ -778,11 +777,172 @@ var cookie = exports.extend({
 
 });
 
+require.addModuleClosure("screens", function(require, exports, module) {
+var Class = require('class').Class,
+	Backbone = require('backbone'),
+	when = require('promise').when,
+	View = Backbone.View;
+
+
+var Screens = new Class({
+	extend: View,
+	
+	templateName: '{name}.html',
+	
+	constructor: function(element, screens) {
+		this.el = $(element);
+		this.$('> *').hide();
+		this.screens = {};
+		this.titles = {};
+		if (screens) {
+			for (var name in screens) {
+				if (!screens.hasOwnProperty(name)) continue;
+				this.screens[name] = $(screens[name]);
+			}
+		}
+	},
+	
+	at: function(screen) {
+		var screens = screen.split('/'),
+			basescreen = screens.shift(),
+			subscreen = screens.shift();
+		
+		if (this.screens.hasOwnProperty(basescreen) && (basescreen = this.screens[basescreen]).filter(':visible').length) {
+			if (!subscreen || basescreen.find('.screens > .' + subscreen + ':visible').length) {
+				return true;
+			}
+		}
+		return false;
+	},
+	
+	go: function(screen) {
+		location.hash = '#/' + screen;
+	},
+	
+	/**
+	 * Open a screen by the given name, if not loaded yet will load first
+	 * @param name The screen name
+	 * @param data Data to pass into the "show" event of the screen
+	 * @return This object
+	 */
+	open: function(name, data) {
+		var basescreen = name.split('/').shift();
+		
+		if (!this.screens.hasOwnProperty(basescreen)) {
+			var self = this;
+			this.load(basescreen).then(function() {
+				self._open(name, data);
+			});
+		} else {
+			this._open(name, data);
+		}
+		return this;
+	},
+	
+	/**
+	 * Loads a screen by name
+	 * @param name
+	 */
+	load: function(name) {
+		var url = this.templateName.replace(/\{\s*name\s*\}/g, name), self = this;
+		var screen = $('<div class="screen loading"></div>').attr('id', name + '-screen').appendTo(this.el);
+		self.screens[name] = screen;
+		self.trigger('created:' + name, screen);
+		self.trigger('created', name, screen);
+		
+		return when($.ajax({ url: url, dataType: 'html' })).then(function(result) {
+			var bod = result.indexOf('<body');
+			if (bod !== -1) {
+				var title = (result.match(/<title>([^<]+)<\/title>/) || {1: 'Static Site CMS'})[1];
+				var bodStart = result.indexOf('>', bod) + 1;
+				var bodEnd = result.lastIndexOf('</body>');
+				self.titles[name] = title;
+				var match = result.slice(bod, bodStart).match(/ class="([^"]+)"/);
+				if (match) screen.data('bodyClasses', match[1]);
+				result = result.slice(bodStart, bodEnd);
+			}
+			result = result.replace(/<script.+?<\/script>/g, '');
+			screen.html(result).removeClass('loading').hide().find('.screens > :not(:first-child)').hide();
+			self.trigger('load:' + name, screen);
+			self.trigger('load', name, screen);
+			
+			try {
+				require('screens/' + name);
+			} catch(e) {}
+			
+			return screen;
+		});
+	},
+	
+	_open: function(name, data) {
+		var screens = name.split('/'), self = this;
+		var basescreen = screens.shift(), subscreen = screens.shift();
+		var screen = this.screens[basescreen], sub = subscreen ? screen.find('.screens > .' + subscreen + '-screen') : screen.find('.screens > :first');
+		if (this.titles.hasOwnProperty(basescreen)) document.title = this.titles[basescreen];
+		var baseOpened = false;
+		
+		if (!screen.filter(':visible').length) {
+			// close open screen
+			this.$('> :visible').hide().trigger('hide').each(function() {
+				var screen = $(this);
+				var name = screen.attr('id').replace('-screen', '');
+				var classes = screen.data('bodyData');
+				if (classes) $('body').removeClass(classes);
+				self.trigger('close:' + name, screen);
+				self.trigger('close', name, screen);
+			});
+			
+			var classes = screen.data('bodyClasses');
+			if (classes) $('body').addClass(classes);
+			screen.show().trigger('show', [data]);
+			this.trigger('open:' + basescreen, screen);
+			this.trigger('open', basescreen, screen);
+			baseOpened = true;
+		}
+		
+		if (sub.length && (baseOpened || !sub.filter(':visible').length)) {
+			// close open screen
+			if (!sub.filter(':visible').length) {
+				sub.siblings(':visible').hide().each(function() {
+					var screen = $(this);
+					var name = screen.attr('class').replace(/(\S+)-screen/, '$1');
+					name = screen.parent().closest('.screen').attr('id').replace('-screen', '') + '/' + name;
+					self.trigger('close:' + name, screen);
+					self.trigger('close', name, screen);
+				});
+				sub.show();
+			}
+			this.trigger('open:' + name, sub);
+			this.trigger('open', name, sub);
+		}
+	}
+});
+
+
+
+var screens = module.exports = new Screens('#screens');
+screens.bind('close', function(name) {
+	$('body').removeClass(name.split('/').shift());
+});
+screens.bind('open', function(name) {
+	$('body').addClass(name.split('/').shift());
+});
+
+
+
+var history = Backbone.history = new Backbone.History();
+history.route(/.*/, function(screen) {
+	if (screen.slice(0, 1) === '/') screens.open(screen.slice(1));
+	else if (screen == '') screens.go('dashboard');
+});
+history.start();
+});
+
 require.addModuleClosure("data", function(require, exports, module) {
-var transport = require('transport'),
-	cookie = require('cookie'),
+var cookie = require('cookie'),
 	sha1 = require('crypto').sha1,
 	aes = require('crypto').aes,
+	uuid = require('crypto').uuid,
 	when = require('promise').when,
 	Backbone = require('backbone');
 	Deferred = require('promise').Deferred,
@@ -798,20 +958,16 @@ var data = exports.extend(Backbone.Events, {
 	
 	collections: {},
 	
-	get: function(url, params) {
-		
+	get: function(url) {
+		return bucket.get('api/' + url);
 	},
 	
-	put: function(url, body, params) {
-		
+	put: function(url, data) {
+		return bucket.put('api/' + url, data);
 	},
 	
-	post: function(url, body, params) {
-		
-	},
-	
-	destory: function(url, params) {
-		
+	destory: function(url) {
+		return bucket.destory('api/' + url);
 	},
 	
 	refresh: function(options) {
@@ -820,16 +976,20 @@ var data = exports.extend(Backbone.Events, {
 		
 		bucket.list('api/').then(function(results) {
 			var urlExp = /^api\/(\w+)\/(\w+)$/;
+			var has = {};
+			
 			
 			results.contents.forEach(function(item) {
 				var match = item.key.match(urlExp);
 				if (!match) return;
-				try {
-					var id = match[2];
-					var collection = data.collections[match[1]];
-				} catch(e) {
-					return;
-				}
+				var id = match[2];
+				var type = match[1];
+				if (!data.collections.hasOwnProperty(type)) return;
+				
+				var collection = data.collections[type];
+				if (!has[type]) has[type] = {};
+				
+				has[type][id] = true;
 				
 				// if we have it and it is up-to-date, don't load it.
 				if (collection.get(id) && collection.get(id).etag == item.etag) return;
@@ -837,12 +997,28 @@ var data = exports.extend(Backbone.Events, {
 				// queue up all the calls so that the final promise won't be done until all of these are.
 				promise = promise.then(bucket.get(item.key).then(function(data) {
 					data = JSON.parse(data);
-					data.id = id;
-					collection.add(data, options).get(id).etag = item.etag;
+					data.id = id; // just in case it hadn't been set
+					if (collection.get(id)) {
+						collection.get(id).set(data, options).etag = item.etag;
+					} else {
+						collection.add(data, options).get(id).etag = item.etag;
+					}
 				}, function(error) {
 					console.error(error);
 				}));
 			});
+			
+			// remove deleted items
+			for (var type in has) {
+				var remove = [];
+				var ids = has[type];
+				var collection = data.collections[type];
+				collection.each(function(item) {
+					if (!ids[item.id]) remove.push(item);
+				});
+				collection.remove(remove, options);
+			}
+			
 		}, deferred.fail);
 		
 		// return the data object as the promise result from this call
@@ -945,1462 +1121,94 @@ function thirtyDays() {
 }
 });
 
-require.addModuleClosure("screens", function(require, exports, module) {
-var Class = require('class').Class,
-	Backbone = require('backbone')
-	View = Backbone.View;
-
-
-var Screens = new Class({
-	extend: View,
-	
-	templateName: '{name}.html',
-	
-	constructor: function(element, screens) {
-		this.el = $(element);
-		this.$('> *').hide();
-		this.screens = {};
-		this.titles = {};
-		if (screens) {
-			for (var name in screens) {
-				if (!screens.hasOwnProperty(name)) continue;
-				this.screens[name] = $(screens[name]);
-			}
-		}
-	},
-	
-	at: function(screen) {
-		var screens = screen.split('/'),
-			basescreen = screens.shift(),
-			subscreen = screens.shift();
-		
-		if (this.screens.hasOwnProperty(basescreen) && (basescreen = this.screens[basescreen]).filter(':visible').length) {
-			if (!subscreen || basescreen.find('.screens > .' + subscreen + ':visible').length) {
-				return true;
-			}
-		}
-		return false;
-	},
-	
-	go: function(screen) {
-		location.hash = '#/' + screen;
-	},
-	
-	/**
-	 * Open a screen by the given name, if not loaded yet will load first
-	 * @param name The screen name
-	 * @param data Data to pass into the "show" event of the screen
-	 * @return This object
-	 */
-	open: function(name, data) {
-		var basescreen = name.split('/').shift();
-		
-		if (!this.screens.hasOwnProperty(basescreen)) {
-			var self = this;
-			this.load(basescreen).then(function() {
-				self._open(name, data);
-			});
-		} else {
-			this._open(name, data);
-		}
-		return this;
-	},
-	
-	/**
-	 * Loads a screen by name
-	 * @param name
-	 */
-	load: function(name) {
-		var url = this.templateName.replace(/\{\s*name\s*\}/g, name), self = this;
-		var screen = $('<div class="screen loading"></div>').attr('id', name).appendTo(this.el);
-		self.screens[name] = screen;
-		self.trigger('created:' + name, screen);
-		self.trigger('created', name, screen);
-		
-		return $.ajax({ url: url, dataType: 'html' }).then(function(result) {
-			var bod = result.indexOf('<body');
-			if (bod !== -1) {
-				var title = (result.match(/<title>([^<]+)<\/title>/) || {1: 'Static Site CMS'})[1];
-				var bodStart = result.indexOf('>', bod) + 1;
-				var bodEnd = result.lastIndexOf('</body>');
-				self.titles[name] = title;
-				result = result.slice(bodStart, bodEnd);
-			}
-			result = result.replace(/<script.+?<\/script>/g, '');
-			screen.html(result).removeClass('loading').hide().find('.screens > :not(:first-child)').hide();
-			self.trigger('load:' + name, screen);
-			self.trigger('load', name, screen);
-			
-			try {
-				require('screens/' + name);
-			} catch(e) {}
-			
-			return screen;
-		});
-	},
-	
-	_open: function(name, data) {
-		var screens = name.split('/'), self = this;
-		var basescreen = screens.shift(), subscreen = screens.shift();
-		var screen = this.screens[basescreen], sub = subscreen ? screen.find('.screens > .' + subscreen) : screen.find('.screens > :first');
-		if (this.titles.hasOwnProperty(basescreen)) document.title = this.titles[basescreen];
-		var baseOpened = false;
-		
-		if (!screen.filter(':visible').length) {
-			screen.siblings(':visible').hide().trigger('hide').each(function() {
-				self.trigger('close', $(this));
-			});
-			
-			screen.show().trigger('show', [data]);
-			this.trigger('open:' + basescreen, screen);
-			this.trigger('open', basescreen, screen);
-			baseOpened = true;
-		}
-		
-		if (sub.length && (baseOpened || !sub.filter(':visible').length)) {
-			if (!sub.filter(':visible').length) {
-				sub.siblings(':visible').hide();
-				sub.show();
-			}
-			this.trigger('open:' + name, sub);
-			this.trigger('open', name, sub);
-		}
-	}
-});
-
-
-
-var screens = module.exports = new Screens('#screens');
-screens.bind('open', function(name) {
-	$('body').attr('class', name.split('/').shift());
-});
-
-
-
-var history = Backbone.history = new Backbone.History();
-history.route(/.*/, function(screen) {
-	if (screen.slice(0, 1) === '/') screens.open(screen.slice(1));
-	else if (screen == '') screens.go('dashboard');
-});
-history.start();
-});
-
-require.addModuleClosure("crypto", function(require, exports, module) {
-/* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  */
-/*  AES implementation in JavaScript (c) Chris Veness 2005-2011                                   */
-/*   - see http://csrc.nist.gov/publications/PubsFIPS.html#197                                    */
-/* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  */
-
-var Aes = {};  // Aes namespace
+require.addModuleClosure("class", function(require, exports, module) {
 
 /**
- * AES Cipher function: encrypt 'input' state with Rijndael algorithm
- *   applies Nr rounds (10/12/14) using key schedule w for 'add round key' stage
- *
- * @param {Number[]} input 16-byte (128-bit) input state array
- * @param {Number[][]} w   Key schedule as 2D byte-array (Nr+1 x Nb bytes)
- * @returns {Number[]}     Encrypted output state array
- */
-Aes.cipher = function(input, w) {    // main Cipher function [�5.1]
-  var Nb = 4;               // block size (in words): no of columns in state (fixed at 4 for AES)
-  var Nr = w.length/Nb - 1; // no of rounds: 10/12/14 for 128/192/256-bit keys
-
-  var state = [[],[],[],[]];  // initialise 4xNb byte-array 'state' with input [�3.4]
-  for (var i=0; i<4*Nb; i++) state[i%4][Math.floor(i/4)] = input[i];
-
-  state = Aes.addRoundKey(state, w, 0, Nb);
-
-  for (var round=1; round<Nr; round++) {
-    state = Aes.subBytes(state, Nb);
-    state = Aes.shiftRows(state, Nb);
-    state = Aes.mixColumns(state, Nb);
-    state = Aes.addRoundKey(state, w, round, Nb);
-  }
-
-  state = Aes.subBytes(state, Nb);
-  state = Aes.shiftRows(state, Nb);
-  state = Aes.addRoundKey(state, w, Nr, Nb);
-
-  var output = new Array(4*Nb);  // convert state to 1-d array before returning [�3.4]
-  for (var i=0; i<4*Nb; i++) output[i] = state[i%4][Math.floor(i/4)];
-  return output;
-};
-
-/**
- * Perform Key Expansion to generate a Key Schedule
- *
- * @param {Number[]} key Key as 16/24/32-byte array
- * @returns {Number[][]} Expanded key schedule as 2D byte-array (Nr+1 x Nb bytes)
- */
-Aes.keyExpansion = function(key) {  // generate Key Schedule (byte-array Nr+1 x Nb) from Key [�5.2]
-  var Nb = 4;            // block size (in words): no of columns in state (fixed at 4 for AES)
-  var Nk = key.length/4  // key length (in words): 4/6/8 for 128/192/256-bit keys
-  var Nr = Nk + 6;       // no of rounds: 10/12/14 for 128/192/256-bit keys
-
-  var w = new Array(Nb*(Nr+1));
-  var temp = new Array(4);
-
-  for (var i=0; i<Nk; i++) {
-    var r = [key[4*i], key[4*i+1], key[4*i+2], key[4*i+3]];
-    w[i] = r;
-  }
-
-  for (var i=Nk; i<(Nb*(Nr+1)); i++) {
-    w[i] = new Array(4);
-    for (var t=0; t<4; t++) temp[t] = w[i-1][t];
-    if (i % Nk == 0) {
-      temp = Aes.subWord(Aes.rotWord(temp));
-      for (var t=0; t<4; t++) temp[t] ^= Aes.rCon[i/Nk][t];
-    } else if (Nk > 6 && i%Nk == 4) {
-      temp = Aes.subWord(temp);
-    }
-    for (var t=0; t<4; t++) w[i][t] = w[i-Nk][t] ^ temp[t];
-  }
-
-  return w;
-};
-
-/*
- * ---- remaining routines are private, not called externally ----
- */
- 
-Aes.subBytes = function(s, Nb) {    // apply SBox to state S [�5.1.1]
-  for (var r=0; r<4; r++) {
-    for (var c=0; c<Nb; c++) s[r][c] = Aes.sBox[s[r][c]];
-  }
-  return s;
-};
-
-Aes.shiftRows = function(s, Nb) {    // shift row r of state S left by r bytes [�5.1.2]
-  var t = new Array(4);
-  for (var r=1; r<4; r++) {
-    for (var c=0; c<4; c++) t[c] = s[r][(c+r)%Nb];  // shift into temp copy
-    for (var c=0; c<4; c++) s[r][c] = t[c];         // and copy back
-  }          // note that this will work for Nb=4,5,6, but not 7,8 (always 4 for AES):
-  return s;  // see asmaes.sourceforge.net/rijndael/rijndaelImplementation.pdf
-};
-
-Aes.mixColumns = function(s, Nb) {   // combine bytes of each col of state S [�5.1.3]
-  for (var c=0; c<4; c++) {
-    var a = new Array(4);  // 'a' is a copy of the current column from 's'
-    var b = new Array(4);  // 'b' is a�{02} in GF(2^8)
-    for (var i=0; i<4; i++) {
-      a[i] = s[i][c];
-      b[i] = s[i][c]&0x80 ? s[i][c]<<1 ^ 0x011b : s[i][c]<<1;
-
-    }
-    // a[n] ^ b[n] is a�{03} in GF(2^8)
-    s[0][c] = b[0] ^ a[1] ^ b[1] ^ a[2] ^ a[3]; // 2*a0 + 3*a1 + a2 + a3
-    s[1][c] = a[0] ^ b[1] ^ a[2] ^ b[2] ^ a[3]; // a0 * 2*a1 + 3*a2 + a3
-    s[2][c] = a[0] ^ a[1] ^ b[2] ^ a[3] ^ b[3]; // a0 + a1 + 2*a2 + 3*a3
-    s[3][c] = a[0] ^ b[0] ^ a[1] ^ a[2] ^ b[3]; // 3*a0 + a1 + a2 + 2*a3
-  }
-  return s;
-};
-
-Aes.addRoundKey = function(state, w, rnd, Nb) {  // xor Round Key into state S [�5.1.4]
-  for (var r=0; r<4; r++) {
-    for (var c=0; c<Nb; c++) state[r][c] ^= w[rnd*4+c][r];
-  }
-  return state;
-};
-
-Aes.subWord = function(w) {    // apply SBox to 4-byte word w
-  for (var i=0; i<4; i++) w[i] = Aes.sBox[w[i]];
-  return w;
-};
-
-Aes.rotWord = function(w) {    // rotate 4-byte word w left by one byte
-  var tmp = w[0];
-  for (var i=0; i<3; i++) w[i] = w[i+1];
-  w[3] = tmp;
-  return w;
-};
-
-// sBox is pre-computed multiplicative inverse in GF(2^8) used in subBytes and keyExpansion [�5.1.1]
-Aes.sBox =  [0x63,0x7c,0x77,0x7b,0xf2,0x6b,0x6f,0xc5,0x30,0x01,0x67,0x2b,0xfe,0xd7,0xab,0x76,
-             0xca,0x82,0xc9,0x7d,0xfa,0x59,0x47,0xf0,0xad,0xd4,0xa2,0xaf,0x9c,0xa4,0x72,0xc0,
-             0xb7,0xfd,0x93,0x26,0x36,0x3f,0xf7,0xcc,0x34,0xa5,0xe5,0xf1,0x71,0xd8,0x31,0x15,
-             0x04,0xc7,0x23,0xc3,0x18,0x96,0x05,0x9a,0x07,0x12,0x80,0xe2,0xeb,0x27,0xb2,0x75,
-             0x09,0x83,0x2c,0x1a,0x1b,0x6e,0x5a,0xa0,0x52,0x3b,0xd6,0xb3,0x29,0xe3,0x2f,0x84,
-             0x53,0xd1,0x00,0xed,0x20,0xfc,0xb1,0x5b,0x6a,0xcb,0xbe,0x39,0x4a,0x4c,0x58,0xcf,
-             0xd0,0xef,0xaa,0xfb,0x43,0x4d,0x33,0x85,0x45,0xf9,0x02,0x7f,0x50,0x3c,0x9f,0xa8,
-             0x51,0xa3,0x40,0x8f,0x92,0x9d,0x38,0xf5,0xbc,0xb6,0xda,0x21,0x10,0xff,0xf3,0xd2,
-             0xcd,0x0c,0x13,0xec,0x5f,0x97,0x44,0x17,0xc4,0xa7,0x7e,0x3d,0x64,0x5d,0x19,0x73,
-             0x60,0x81,0x4f,0xdc,0x22,0x2a,0x90,0x88,0x46,0xee,0xb8,0x14,0xde,0x5e,0x0b,0xdb,
-             0xe0,0x32,0x3a,0x0a,0x49,0x06,0x24,0x5c,0xc2,0xd3,0xac,0x62,0x91,0x95,0xe4,0x79,
-             0xe7,0xc8,0x37,0x6d,0x8d,0xd5,0x4e,0xa9,0x6c,0x56,0xf4,0xea,0x65,0x7a,0xae,0x08,
-             0xba,0x78,0x25,0x2e,0x1c,0xa6,0xb4,0xc6,0xe8,0xdd,0x74,0x1f,0x4b,0xbd,0x8b,0x8a,
-             0x70,0x3e,0xb5,0x66,0x48,0x03,0xf6,0x0e,0x61,0x35,0x57,0xb9,0x86,0xc1,0x1d,0x9e,
-             0xe1,0xf8,0x98,0x11,0x69,0xd9,0x8e,0x94,0x9b,0x1e,0x87,0xe9,0xce,0x55,0x28,0xdf,
-             0x8c,0xa1,0x89,0x0d,0xbf,0xe6,0x42,0x68,0x41,0x99,0x2d,0x0f,0xb0,0x54,0xbb,0x16];
-
-// rCon is Round Constant used for the Key Expansion [1st col is 2^(r-1) in GF(2^8)] [�5.2]
-Aes.rCon = [ [0x00, 0x00, 0x00, 0x00],
-             [0x01, 0x00, 0x00, 0x00],
-             [0x02, 0x00, 0x00, 0x00],
-             [0x04, 0x00, 0x00, 0x00],
-             [0x08, 0x00, 0x00, 0x00],
-             [0x10, 0x00, 0x00, 0x00],
-             [0x20, 0x00, 0x00, 0x00],
-             [0x40, 0x00, 0x00, 0x00],
-             [0x80, 0x00, 0x00, 0x00],
-             [0x1b, 0x00, 0x00, 0x00],
-             [0x36, 0x00, 0x00, 0x00] ]; 
-
-
-/* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  */
-/*  AES Counter-mode implementation in JavaScript (c) Chris Veness 2005-2011                      */
-/*   - see http://csrc.nist.gov/publications/nistpubs/800-38a/sp800-38a.pdf                       */
-/* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  */
-
-Aes.Ctr = {};  // Aes.Ctr namespace: a subclass or extension of Aes
-
-/** 
- * Encrypt a text using AES encryption in Counter mode of operation
- *
- * Unicode multi-byte character safe
- *
- * @param {String} plaintext Source text to be encrypted
- * @param {String} password  The password to use to generate a key
- * @param {Number} nBits     Number of bits to be used in the key (128, 192, or 256)
- * @returns {string}         Encrypted text
- */
-Aes.Ctr.encrypt = function(plaintext, password, nBits) {
-  var blockSize = 16;  // block size fixed at 16 bytes / 128 bits (Nb=4) for AES
-  if (!(nBits==128 || nBits==192 || nBits==256)) return '';  // standard allows 128/192/256 bit keys
-  plaintext = Utf8.encode(plaintext);
-  password = Utf8.encode(password);
-  //var t = new Date();  // timer
-        
-  // use AES itself to encrypt password to get cipher key (using plain password as source for key 
-  // expansion) - gives us well encrypted key
-  var nBytes = nBits/8;  // no bytes in key
-  var pwBytes = new Array(nBytes);
-  for (var i=0; i<nBytes; i++) {
-    pwBytes[i] = isNaN(password.charCodeAt(i)) ? 0 : password.charCodeAt(i);
-  }
-  var key = Aes.cipher(pwBytes, Aes.keyExpansion(pwBytes));  // gives us 16-byte key
-  key = key.concat(key.slice(0, nBytes-16));  // expand key to 16/24/32 bytes long
-
-  // initialise 1st 8 bytes of counter block with nonce (NIST SP800-38A �B.2): [0-1] = millisec, 
-  // [2-3] = random, [4-7] = seconds, together giving full sub-millisec uniqueness up to Feb 2106
-  var counterBlock = new Array(blockSize);
-  
-  var nonce = (new Date()).getTime();  // timestamp: milliseconds since 1-Jan-1970
-  var nonceMs = nonce%1000;
-  var nonceSec = Math.floor(nonce/1000);
-  var nonceRnd = Math.floor(Math.random()*0xffff);
-  
-  for (var i=0; i<2; i++) counterBlock[i]   = (nonceMs  >>> i*8) & 0xff;
-  for (var i=0; i<2; i++) counterBlock[i+2] = (nonceRnd >>> i*8) & 0xff;
-  for (var i=0; i<4; i++) counterBlock[i+4] = (nonceSec >>> i*8) & 0xff;
-  
-  // and convert it to a string to go on the front of the ciphertext
-  var ctrTxt = '';
-  for (var i=0; i<8; i++) ctrTxt += String.fromCharCode(counterBlock[i]);
-
-  // generate key schedule - an expansion of the key into distinct Key Rounds for each round
-  var keySchedule = Aes.keyExpansion(key);
-  
-  var blockCount = Math.ceil(plaintext.length/blockSize);
-  var ciphertxt = new Array(blockCount);  // ciphertext as array of strings
-  
-  for (var b=0; b<blockCount; b++) {
-    // set counter (block #) in last 8 bytes of counter block (leaving nonce in 1st 8 bytes)
-    // done in two stages for 32-bit ops: using two words allows us to go past 2^32 blocks (68GB)
-    for (var c=0; c<4; c++) counterBlock[15-c] = (b >>> c*8) & 0xff;
-    for (var c=0; c<4; c++) counterBlock[15-c-4] = (b/0x100000000 >>> c*8)
-
-    var cipherCntr = Aes.cipher(counterBlock, keySchedule);  // -- encrypt counter block --
-    
-    // block size is reduced on final block
-    var blockLength = b<blockCount-1 ? blockSize : (plaintext.length-1)%blockSize+1;
-    var cipherChar = new Array(blockLength);
-    
-    for (var i=0; i<blockLength; i++) {  // -- xor plaintext with ciphered counter char-by-char --
-      cipherChar[i] = cipherCntr[i] ^ plaintext.charCodeAt(b*blockSize+i);
-      cipherChar[i] = String.fromCharCode(cipherChar[i]);
-    }
-    ciphertxt[b] = cipherChar.join(''); 
-  }
-
-  // Array.join is more efficient than repeated string concatenation in IE
-  var ciphertext = ctrTxt + ciphertxt.join('');
-  ciphertext = Base64.encode(ciphertext);  // encode in base64
-  
-  //alert((new Date()) - t);
-  return ciphertext;
-};
-
-/** 
- * Decrypt a text encrypted by AES in counter mode of operation
- *
- * @param {String} ciphertext Source text to be encrypted
- * @param {String} password   The password to use to generate a key
- * @param {Number} nBits      Number of bits to be used in the key (128, 192, or 256)
- * @returns {String}          Decrypted text
- */
-Aes.Ctr.decrypt = function(ciphertext, password, nBits) {
-  var blockSize = 16;  // block size fixed at 16 bytes / 128 bits (Nb=4) for AES
-  if (!(nBits==128 || nBits==192 || nBits==256)) return '';  // standard allows 128/192/256 bit keys
-  ciphertext = Base64.decode(ciphertext);
-  password = Utf8.encode(password);
-  //var t = new Date();  // timer
-  
-  // use AES to encrypt password (mirroring encrypt routine)
-  var nBytes = nBits/8;  // no bytes in key
-  var pwBytes = new Array(nBytes);
-  for (var i=0; i<nBytes; i++) {
-    pwBytes[i] = isNaN(password.charCodeAt(i)) ? 0 : password.charCodeAt(i);
-  }
-  var key = Aes.cipher(pwBytes, Aes.keyExpansion(pwBytes));
-  key = key.concat(key.slice(0, nBytes-16));  // expand key to 16/24/32 bytes long
-
-  // recover nonce from 1st 8 bytes of ciphertext
-  var counterBlock = new Array(8);
-  ctrTxt = ciphertext.slice(0, 8);
-  for (var i=0; i<8; i++) counterBlock[i] = ctrTxt.charCodeAt(i);
-  
-  // generate key schedule
-  var keySchedule = Aes.keyExpansion(key);
-
-  // separate ciphertext into blocks (skipping past initial 8 bytes)
-  var nBlocks = Math.ceil((ciphertext.length-8) / blockSize);
-  var ct = new Array(nBlocks);
-  for (var b=0; b<nBlocks; b++) ct[b] = ciphertext.slice(8+b*blockSize, 8+b*blockSize+blockSize);
-  ciphertext = ct;  // ciphertext is now array of block-length strings
-
-  // plaintext will get generated block-by-block into array of block-length strings
-  var plaintxt = new Array(ciphertext.length);
-
-  for (var b=0; b<nBlocks; b++) {
-    // set counter (block #) in last 8 bytes of counter block (leaving nonce in 1st 8 bytes)
-    for (var c=0; c<4; c++) counterBlock[15-c] = ((b) >>> c*8) & 0xff;
-    for (var c=0; c<4; c++) counterBlock[15-c-4] = (((b+1)/0x100000000-1) >>> c*8) & 0xff;
-
-    var cipherCntr = Aes.cipher(counterBlock, keySchedule);  // encrypt counter block
-
-    var plaintxtByte = new Array(ciphertext[b].length);
-    for (var i=0; i<ciphertext[b].length; i++) {
-      // -- xor plaintxt with ciphered counter byte-by-byte --
-      plaintxtByte[i] = cipherCntr[i] ^ ciphertext[b].charCodeAt(i);
-      plaintxtByte[i] = String.fromCharCode(plaintxtByte[i]);
-    }
-    plaintxt[b] = plaintxtByte.join('');
-  }
-
-  // join array of blocks into single plaintext string
-  var plaintext = plaintxt.join('');
-  plaintext = Utf8.decode(plaintext);  // decode from UTF8 back to Unicode multi-byte chars
-  
-  //alert((new Date()) - t);
-  return plaintext;
-};
-
-/* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  */
-/*  SHA-1 implementation in JavaScript | (c) Chris Veness 2002-2010 | www.movable-type.co.uk      */
-/*   - see http://csrc.nist.gov/groups/ST/toolkit/secure_hashing.html                             */
-/*         http://csrc.nist.gov/groups/ST/toolkit/examples.html                                   */
-/* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  */
-
-var Sha1 = {};  // Sha1 namespace
-
-/**
- * Generates SHA-1 hash of string
- *
- * @param {String} msg                String to be hashed
- * @param {Boolean} [utf8encode=true] Encode msg as UTF-8 before generating hash
- * @returns {String}                  Hash of msg as hex character string
- */
-Sha1.hash = function(msg, utf8encode) {
-  utf8encode =  (typeof utf8encode == 'undefined') ? true : utf8encode;
-  
-  // convert string to UTF-8, as SHA only deals with byte-streams
-  if (utf8encode) msg = Utf8.encode(msg);
-  
-  // constants [�4.2.1]
-  var K = [0x5a827999, 0x6ed9eba1, 0x8f1bbcdc, 0xca62c1d6];
-  
-  // PREPROCESSING 
-  
-  msg += String.fromCharCode(0x80);  // add trailing '1' bit (+ 0's padding) to string [�5.1.1]
-  
-  // convert string msg into 512-bit/16-integer blocks arrays of ints [�5.2.1]
-  var l = msg.length/4 + 2;  // length (in 32-bit integers) of msg + �1� + appended length
-  var N = Math.ceil(l/16);   // number of 16-integer-blocks required to hold 'l' ints
-  var M = new Array(N);
-  
-  for (var i=0; i<N; i++) {
-    M[i] = new Array(16);
-    for (var j=0; j<16; j++) {  // encode 4 chars per integer, big-endian encoding
-      M[i][j] = (msg.charCodeAt(i*64+j*4)<<24) | (msg.charCodeAt(i*64+j*4+1)<<16) | 
-        (msg.charCodeAt(i*64+j*4+2)<<8) | (msg.charCodeAt(i*64+j*4+3));
-    } // note running off the end of msg is ok 'cos bitwise ops on NaN return 0
-  }
-  // add length (in bits) into final pair of 32-bit integers (big-endian) [�5.1.1]
-  // note: most significant word would be (len-1)*8 >>> 32, but since JS converts
-  // bitwise-op args to 32 bits, we need to simulate this by arithmetic operators
-  M[N-1][14] = ((msg.length-1)*8) / Math.pow(2, 32); M[N-1][14] = Math.floor(M[N-1][14])
-  M[N-1][15] = ((msg.length-1)*8) & 0xffffffff;
-  
-  // set initial hash value [�5.3.1]
-  var H0 = 0x67452301;
-  var H1 = 0xefcdab89;
-  var H2 = 0x98badcfe;
-  var H3 = 0x10325476;
-  var H4 = 0xc3d2e1f0;
-  
-  // HASH COMPUTATION [�6.1.2]
-  
-  var W = new Array(80); var a, b, c, d, e;
-  for (var i=0; i<N; i++) {
-  
-    // 1 - prepare message schedule 'W'
-    for (var t=0;  t<16; t++) W[t] = M[i][t];
-    for (var t=16; t<80; t++) W[t] = Sha1.ROTL(W[t-3] ^ W[t-8] ^ W[t-14] ^ W[t-16], 1);
-    
-    // 2 - initialise five working variables a, b, c, d, e with previous hash value
-    a = H0; b = H1; c = H2; d = H3; e = H4;
-    
-    // 3 - main loop
-    for (var t=0; t<80; t++) {
-      var s = Math.floor(t/20); // seq for blocks of 'f' functions and 'K' constants
-      var T = (Sha1.ROTL(a,5) + Sha1.f(s,b,c,d) + e + K[s] + W[t]) & 0xffffffff;
-      e = d;
-      d = c;
-      c = Sha1.ROTL(b, 30);
-      b = a;
-      a = T;
-    }
-    
-    // 4 - compute the new intermediate hash value
-    H0 = (H0+a) & 0xffffffff;  // note 'addition modulo 2^32'
-    H1 = (H1+b) & 0xffffffff; 
-    H2 = (H2+c) & 0xffffffff; 
-    H3 = (H3+d) & 0xffffffff; 
-    H4 = (H4+e) & 0xffffffff;
-  }
-
-  return Sha1.toHexStr(H0) + Sha1.toHexStr(H1) + 
-    Sha1.toHexStr(H2) + Sha1.toHexStr(H3) + Sha1.toHexStr(H4);
-};
-
-//
-// function 'f' [�4.1.1]
-//
-Sha1.f = function(s, x, y, z)  {
-  switch (s) {
-  case 0: return (x & y) ^ (~x & z);           // Ch()
-  case 1: return x ^ y ^ z;                    // Parity()
-  case 2: return (x & y) ^ (x & z) ^ (y & z);  // Maj()
-  case 3: return x ^ y ^ z;                    // Parity()
-  }
-};
-
-//
-// rotate left (circular left shift) value x by n positions [�3.2.5]
-//
-Sha1.ROTL = function(x, n) {
-  return (x<<n) | (x>>>(32-n));
-};
-
-//
-// hexadecimal representation of a number 
-//   (note toString(16) is implementation-dependant, and  
-//   in IE returns signed numbers when used on full words)
-//
-Sha1.toHexStr = function(n) {
-  var s="", v;
-  for (var i=7; i>=0; i--) { v = (n>>>(i*4)) & 0xf; s += v.toString(16); }
-  return s;
-};
-
-/* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  */
-/*  Base64 class: Base 64 encoding / decoding (c) Chris Veness 2002-2011                          */
-/*    note: depends on Utf8 class                                                                 */
-/* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  */
-
-var Base64 = {};  // Base64 namespace
-
-Base64.code = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
-
-/**
- * Encode string into Base64, as defined by RFC 4648 [http://tools.ietf.org/html/rfc4648]
- * (instance method extending String object). As per RFC 4648, no newlines are added.
- *
- * @param {String} str The string to be encoded as base-64
- * @param {Boolean} [utf8encode=false] Flag to indicate whether str is Unicode string to be encoded 
- *   to UTF8 before conversion to base64; otherwise string is assumed to be 8-bit characters
- * @returns {String} Base64-encoded string
- */ 
-Base64.encode = function(str, utf8encode) {  // http://tools.ietf.org/html/rfc4648
-  utf8encode =  (typeof utf8encode == 'undefined') ? false : utf8encode;
-  var o1, o2, o3, bits, h1, h2, h3, h4, e=[], pad = '', c, plain, coded;
-  var b64 = Base64.code;
-   
-  plain = utf8encode ? str.encodeUTF8() : str;
-  
-  c = plain.length % 3;  // pad string to length of multiple of 3
-  if (c > 0) { while (c++ < 3) { pad += '='; plain += '\0'; } }
-  // note: doing padding here saves us doing special-case packing for trailing 1 or 2 chars
-   
-  for (c=0; c<plain.length; c+=3) {  // pack three octets into four hexets
-    o1 = plain.charCodeAt(c);
-    o2 = plain.charCodeAt(c+1);
-    o3 = plain.charCodeAt(c+2);
-      
-    bits = o1<<16 | o2<<8 | o3;
-      
-    h1 = bits>>18 & 0x3f;
-    h2 = bits>>12 & 0x3f;
-    h3 = bits>>6 & 0x3f;
-    h4 = bits & 0x3f;
-
-    // use hextets to index into code string
-    e[c/3] = b64.charAt(h1) + b64.charAt(h2) + b64.charAt(h3) + b64.charAt(h4);
-  }
-  coded = e.join('');  // join() is far faster than repeated string concatenation in IE
-  
-  // replace 'A's from padded nulls with '='s
-  coded = coded.slice(0, coded.length-pad.length) + pad;
-   
-  return coded;
-};
-
-/**
- * Decode string from Base64, as defined by RFC 4648 [http://tools.ietf.org/html/rfc4648]
- * (instance method extending String object). As per RFC 4648, newlines are not catered for.
- *
- * @param {String} str The string to be decoded from base-64
- * @param {Boolean} [utf8decode=false] Flag to indicate whether str is Unicode string to be decoded 
- *   from UTF8 after conversion from base64
- * @returns {String} decoded string
- */ 
-Base64.decode = function(str, utf8decode) {
-  utf8decode =  (typeof utf8decode == 'undefined') ? false : utf8decode;
-  var o1, o2, o3, h1, h2, h3, h4, bits, d=[], plain, coded;
-  var b64 = Base64.code;
-
-  coded = utf8decode ? str.decodeUTF8() : str;
-  
-  
-  for (var c=0; c<coded.length; c+=4) {  // unpack four hexets into three octets
-    h1 = b64.indexOf(coded.charAt(c));
-    h2 = b64.indexOf(coded.charAt(c+1));
-    h3 = b64.indexOf(coded.charAt(c+2));
-    h4 = b64.indexOf(coded.charAt(c+3));
-      
-    bits = h1<<18 | h2<<12 | h3<<6 | h4;
-      
-    o1 = bits>>>16 & 0xff;
-    o2 = bits>>>8 & 0xff;
-    o3 = bits & 0xff;
-    
-    d[c/4] = String.fromCharCode(o1, o2, o3);
-    // check for padding
-    if (h4 == 0x40) d[c/4] = String.fromCharCode(o1, o2);
-    if (h3 == 0x40) d[c/4] = String.fromCharCode(o1);
-  }
-  plain = d.join('');  // join() is far faster than repeated string concatenation in IE
-   
-  return utf8decode ? plain.decodeUTF8() : plain; 
-};
-
-
-/* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  */
-/*  Utf8 class: encode / decode between multi-byte Unicode characters and UTF-8 multiple          */
-/*              single-byte character encoding (c) Chris Veness 2002-2011                         */
-/* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  */
-
-var Utf8 = {};  // Utf8 namespace
-
-/**
- * Encode multi-byte Unicode string into utf-8 multiple single-byte characters 
- * (BMP / basic multilingual plane only)
- *
- * Chars in range U+0080 - U+07FF are encoded in 2 chars, U+0800 - U+FFFF in 3 chars
- *
- * @param {String} strUni Unicode string to be encoded as UTF-8
- * @returns {String} encoded string
- */
-Utf8.encode = function(strUni) {
-  // use regular expressions & String.replace callback function for better efficiency 
-  // than procedural approaches
-  var strUtf = strUni.replace(
-      /[\u0080-\u07ff]/g,  // U+0080 - U+07FF => 2 bytes 110yyyyy, 10zzzzzz
-      function(c) { 
-        var cc = c.charCodeAt(0);
-        return String.fromCharCode(0xc0 | cc>>6, 0x80 | cc&0x3f); }
-    );
-  strUtf = strUtf.replace(
-      /[\u0800-\uffff]/g,  // U+0800 - U+FFFF => 3 bytes 1110xxxx, 10yyyyyy, 10zzzzzz
-      function(c) { 
-        var cc = c.charCodeAt(0); 
-        return String.fromCharCode(0xe0 | cc>>12, 0x80 | cc>>6&0x3F, 0x80 | cc&0x3f); }
-    );
-  return strUtf;
-};
-
-/**
- * Decode utf-8 encoded string back into multi-byte Unicode characters
- *
- * @param {String} strUtf UTF-8 string to be decoded back to Unicode
- * @returns {String} decoded string
- */
-Utf8.decode = function(strUtf) {
-  // note: decode 3-byte chars first as decoded 2-byte strings could appear to be 3-byte char!
-  var strUni = strUtf.replace(
-      /[\u00e0-\u00ef][\u0080-\u00bf][\u0080-\u00bf]/g,  // 3-byte chars
-      function(c) {  // (note parentheses for precence)
-        var cc = ((c.charCodeAt(0)&0x0f)<<12) | ((c.charCodeAt(1)&0x3f)<<6) | ( c.charCodeAt(2)&0x3f); 
-        return String.fromCharCode(cc); }
-    );
-  strUni = strUni.replace(
-      /[\u00c0-\u00df][\u0080-\u00bf]/g,                 // 2-byte chars
-      function(c) {  // (note parentheses for precence)
-        var cc = (c.charCodeAt(0)&0x1f)<<6 | c.charCodeAt(1)&0x3f;
-        return String.fromCharCode(cc); }
-    );
-  return strUni;
-};
-
-/* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  */
-
-
-
-/*
- * A JavaScript implementation of the Secure Hash Algorithm, SHA-1, as defined
- * in FIPS PUB 180-1
- * Version 2.1a Copyright Paul Johnston 2000 - 2002.
- * Other contributors: Greg Holt, Andrew Kepert, Ydnar, Lostinet
- * Distributed under the BSD License
- * See http://pajhome.org.uk/crypt/md5 for details.
- */
-
-/*
- * Configurable variables. You may need to tweak these to be compatible with
- * the server-side, but the defaults work in most cases.
- */
-var hexcase = 0;  /* hex output format. 0 - lowercase; 1 - uppercase        */
-var b64pad  = "="; /* base-64 pad character. "=" for strict RFC compliance   */
-var chrsz   = 8;  /* bits per input character. 8 - ASCII; 16 - Unicode      */
-
-/*
- * These are the functions you'll usually want to call
- * They take string arguments and return either hex or base-64 encoded strings
- */
-function hex_sha1(s){return binb2hex(core_sha1(str2binb(s),s.length * chrsz));}
-function b64_sha1(s){return binb2b64(core_sha1(str2binb(s),s.length * chrsz));}
-function str_sha1(s){return binb2str(core_sha1(str2binb(s),s.length * chrsz));}
-function hex_hmac_sha1(key, data){ return binb2hex(core_hmac_sha1(key, data));}
-function b64_hmac_sha1(key, data){ return binb2b64(core_hmac_sha1(key, data));}
-function str_hmac_sha1(key, data){ return binb2str(core_hmac_sha1(key, data));}
-
-/*
- * Perform a simple self-test to see if the VM is working
- */
-function sha1_vm_test()
-{
-  return hex_sha1("abc") == "a9993e364706816aba3e25717850c26c9cd0d89d";
-}
-
-/*
- * Calculate the SHA-1 of an array of big-endian words, and a bit length
- */
-function core_sha1(x, len)
-{
-  /* append padding */
-  x[len >> 5] |= 0x80 << (24 - len % 32);
-  x[((len + 64 >> 9) << 4) + 15] = len;
-
-  var w = Array(80);
-  var a =  1732584193;
-  var b = -271733879;
-  var c = -1732584194;
-  var d =  271733878;
-  var e = -1009589776;
-
-  for(var i = 0; i < x.length; i += 16)
-  {
-    var olda = a;
-    var oldb = b;
-    var oldc = c;
-    var oldd = d;
-    var olde = e;
-
-    for(var j = 0; j < 80; j++)
-    {
-      if(j < 16) w[j] = x[i + j];
-      else w[j] = rol(w[j-3] ^ w[j-8] ^ w[j-14] ^ w[j-16], 1);
-      var t = safe_add(safe_add(rol(a, 5), sha1_ft(j, b, c, d)),
-                       safe_add(safe_add(e, w[j]), sha1_kt(j)));
-      e = d;
-      d = c;
-      c = rol(b, 30);
-      b = a;
-      a = t;
-    }
-
-    a = safe_add(a, olda);
-    b = safe_add(b, oldb);
-    c = safe_add(c, oldc);
-    d = safe_add(d, oldd);
-    e = safe_add(e, olde);
-  }
-  return Array(a, b, c, d, e);
-
-}
-
-/*
- * Perform the appropriate triplet combination function for the current
- * iteration
- */
-function sha1_ft(t, b, c, d)
-{
-  if(t < 20) return (b & c) | ((~b) & d);
-  if(t < 40) return b ^ c ^ d;
-  if(t < 60) return (b & c) | (b & d) | (c & d);
-  return b ^ c ^ d;
-}
-
-/*
- * Determine the appropriate additive constant for the current iteration
- */
-function sha1_kt(t)
-{
-  return (t < 20) ?  1518500249 : (t < 40) ?  1859775393 :
-         (t < 60) ? -1894007588 : -899497514;
-}
-
-/*
- * Calculate the HMAC-SHA1 of a key and some data
- */
-function core_hmac_sha1(key, data)
-{
-  var bkey = str2binb(key);
-  if(bkey.length > 16) bkey = core_sha1(bkey, key.length * chrsz);
-
-  var ipad = Array(16), opad = Array(16);
-  for(var i = 0; i < 16; i++)
-  {
-    ipad[i] = bkey[i] ^ 0x36363636;
-    opad[i] = bkey[i] ^ 0x5C5C5C5C;
-  }
-
-  var hash = core_sha1(ipad.concat(str2binb(data)), 512 + data.length * chrsz);
-  return core_sha1(opad.concat(hash), 512 + 160);
-}
-
-/*
- * Add integers, wrapping at 2^32. This uses 16-bit operations internally
- * to work around bugs in some JS interpreters.
- */
-function safe_add(x, y)
-{
-  var lsw = (x & 0xFFFF) + (y & 0xFFFF);
-  var msw = (x >> 16) + (y >> 16) + (lsw >> 16);
-  return (msw << 16) | (lsw & 0xFFFF);
-}
-
-/*
- * Bitwise rotate a 32-bit number to the left.
- */
-function rol(num, cnt)
-{
-  return (num << cnt) | (num >>> (32 - cnt));
-}
-
-/*
- * Convert an 8-bit or 16-bit string to an array of big-endian words
- * In 8-bit function, characters >255 have their hi-byte silently ignored.
- */
-function str2binb(str)
-{
-  var bin = Array();
-  var mask = (1 << chrsz) - 1;
-  for(var i = 0; i < str.length * chrsz; i += chrsz)
-    bin[i>>5] |= (str.charCodeAt(i / chrsz) & mask) << (32 - chrsz - i%32);
-  return bin;
-}
-
-/*
- * Convert an array of big-endian words to a string
- */
-function binb2str(bin)
-{
-  var str = "";
-  var mask = (1 << chrsz) - 1;
-  for(var i = 0; i < bin.length * 32; i += chrsz)
-    str += String.fromCharCode((bin[i>>5] >>> (32 - chrsz - i%32)) & mask);
-  return str;
-}
-
-/*
- * Convert an array of big-endian words to a hex string.
- */
-function binb2hex(binarray)
-{
-  var hex_tab = hexcase ? "0123456789ABCDEF" : "0123456789abcdef";
-  var str = "";
-  for(var i = 0; i < binarray.length * 4; i++)
-  {
-    str += hex_tab.charAt((binarray[i>>2] >> ((3 - i%4)*8+4)) & 0xF) +
-           hex_tab.charAt((binarray[i>>2] >> ((3 - i%4)*8  )) & 0xF);
-  }
-  return str;
-}
-
-/*
- * Convert an array of big-endian words to a base-64 string
- */
-function binb2b64(binarray)
-{
-  var tab = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-  var str = "";
-  for(var i = 0; i < binarray.length * 4; i += 3)
-  {
-    var triplet = (((binarray[i   >> 2] >> 8 * (3 -  i   %4)) & 0xFF) << 16)
-                | (((binarray[i+1 >> 2] >> 8 * (3 - (i+1)%4)) & 0xFF) << 8 )
-                |  ((binarray[i+2 >> 2] >> 8 * (3 - (i+2)%4)) & 0xFF);
-    for(var j = 0; j < 4; j++)
-    {
-      if(i * 8 + j * 6 > binarray.length * 32) str += b64pad;
-      else str += tab.charAt((triplet >> 6*(3-j)) & 0x3F);
-    }
-  }
-  return str;
-}
-
-/* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  */
-
-
-/*
- * A JavaScript implementation of the RSA Data Security, Inc. MD5 Message
- * Digest Algorithm, as defined in RFC 1321.
- * Copyright (C) Paul Johnston 1999 - 2000.
- * Updated by Greg Holt 2000 - 2001.
- * See http://pajhome.org.uk/site/legal.html for details.
- */
-
-/*
- * Convert a 32-bit number to a hex string with ls-byte first
- */
-var hex_chr = "0123456789abcdef";
-function rhex(num)
-{
-  str = "";
-  for(j = 0; j <= 3; j++)
-    str += hex_chr.charAt((num >> (j * 8 + 4)) & 0x0F) +
-           hex_chr.charAt((num >> (j * 8)) & 0x0F);
-  return str;
-}
-
-/*
- * Convert a string to a sequence of 16-word blocks, stored as an array.
- * Append padding bits and the length, as described in the MD5 standard.
- */
-function str2blks_MD5(str)
-{
-  nblk = ((str.length + 8) >> 6) + 1;
-  blks = new Array(nblk * 16);
-  for(i = 0; i < nblk * 16; i++) blks[i] = 0;
-  for(i = 0; i < str.length; i++)
-    blks[i >> 2] |= str.charCodeAt(i) << ((i % 4) * 8);
-  blks[i >> 2] |= 0x80 << ((i % 4) * 8);
-  blks[nblk * 16 - 2] = str.length * 8;
-  return blks;
-}
-
-/*
- * Add integers, wrapping at 2^32. This uses 16-bit operations internally 
- * to work around bugs in some JS interpreters.
- */
-function add(x, y)
-{
-  var lsw = (x & 0xFFFF) + (y & 0xFFFF);
-  var msw = (x >> 16) + (y >> 16) + (lsw >> 16);
-  return (msw << 16) | (lsw & 0xFFFF);
-}
-
-/*
- * Bitwise rotate a 32-bit number to the left
- */
-function rol(num, cnt)
-{
-  return (num << cnt) | (num >>> (32 - cnt));
-}
-
-/*
- * These functions implement the basic operation for each round of the
- * algorithm.
- */
-function cmn(q, a, b, x, s, t)
-{
-  return add(rol(add(add(a, q), add(x, t)), s), b);
-}
-function ff(a, b, c, d, x, s, t)
-{
-  return cmn((b & c) | ((~b) & d), a, b, x, s, t);
-}
-function gg(a, b, c, d, x, s, t)
-{
-  return cmn((b & d) | (c & (~d)), a, b, x, s, t);
-}
-function hh(a, b, c, d, x, s, t)
-{
-  return cmn(b ^ c ^ d, a, b, x, s, t);
-}
-function ii(a, b, c, d, x, s, t)
-{
-  return cmn(c ^ (b | (~d)), a, b, x, s, t);
-}
-
-/*
- * Take a string and return the hex representation of its MD5.
- */
-function calcMD5(str)
-{
-  x = str2blks_MD5(str);
-  a =  1732584193;
-  b = -271733879;
-  c = -1732584194;
-  d =  271733878;
-
-  for(i = 0; i < x.length; i += 16)
-  {
-    olda = a;
-    oldb = b;
-    oldc = c;
-    oldd = d;
-
-    a = ff(a, b, c, d, x[i+ 0], 7 , -680876936);
-    d = ff(d, a, b, c, x[i+ 1], 12, -389564586);
-    c = ff(c, d, a, b, x[i+ 2], 17,  606105819);
-    b = ff(b, c, d, a, x[i+ 3], 22, -1044525330);
-    a = ff(a, b, c, d, x[i+ 4], 7 , -176418897);
-    d = ff(d, a, b, c, x[i+ 5], 12,  1200080426);
-    c = ff(c, d, a, b, x[i+ 6], 17, -1473231341);
-    b = ff(b, c, d, a, x[i+ 7], 22, -45705983);
-    a = ff(a, b, c, d, x[i+ 8], 7 ,  1770035416);
-    d = ff(d, a, b, c, x[i+ 9], 12, -1958414417);
-    c = ff(c, d, a, b, x[i+10], 17, -42063);
-    b = ff(b, c, d, a, x[i+11], 22, -1990404162);
-    a = ff(a, b, c, d, x[i+12], 7 ,  1804603682);
-    d = ff(d, a, b, c, x[i+13], 12, -40341101);
-    c = ff(c, d, a, b, x[i+14], 17, -1502002290);
-    b = ff(b, c, d, a, x[i+15], 22,  1236535329);    
-
-    a = gg(a, b, c, d, x[i+ 1], 5 , -165796510);
-    d = gg(d, a, b, c, x[i+ 6], 9 , -1069501632);
-    c = gg(c, d, a, b, x[i+11], 14,  643717713);
-    b = gg(b, c, d, a, x[i+ 0], 20, -373897302);
-    a = gg(a, b, c, d, x[i+ 5], 5 , -701558691);
-    d = gg(d, a, b, c, x[i+10], 9 ,  38016083);
-    c = gg(c, d, a, b, x[i+15], 14, -660478335);
-    b = gg(b, c, d, a, x[i+ 4], 20, -405537848);
-    a = gg(a, b, c, d, x[i+ 9], 5 ,  568446438);
-    d = gg(d, a, b, c, x[i+14], 9 , -1019803690);
-    c = gg(c, d, a, b, x[i+ 3], 14, -187363961);
-    b = gg(b, c, d, a, x[i+ 8], 20,  1163531501);
-    a = gg(a, b, c, d, x[i+13], 5 , -1444681467);
-    d = gg(d, a, b, c, x[i+ 2], 9 , -51403784);
-    c = gg(c, d, a, b, x[i+ 7], 14,  1735328473);
-    b = gg(b, c, d, a, x[i+12], 20, -1926607734);
-    
-    a = hh(a, b, c, d, x[i+ 5], 4 , -378558);
-    d = hh(d, a, b, c, x[i+ 8], 11, -2022574463);
-    c = hh(c, d, a, b, x[i+11], 16,  1839030562);
-    b = hh(b, c, d, a, x[i+14], 23, -35309556);
-    a = hh(a, b, c, d, x[i+ 1], 4 , -1530992060);
-    d = hh(d, a, b, c, x[i+ 4], 11,  1272893353);
-    c = hh(c, d, a, b, x[i+ 7], 16, -155497632);
-    b = hh(b, c, d, a, x[i+10], 23, -1094730640);
-    a = hh(a, b, c, d, x[i+13], 4 ,  681279174);
-    d = hh(d, a, b, c, x[i+ 0], 11, -358537222);
-    c = hh(c, d, a, b, x[i+ 3], 16, -722521979);
-    b = hh(b, c, d, a, x[i+ 6], 23,  76029189);
-    a = hh(a, b, c, d, x[i+ 9], 4 , -640364487);
-    d = hh(d, a, b, c, x[i+12], 11, -421815835);
-    c = hh(c, d, a, b, x[i+15], 16,  530742520);
-    b = hh(b, c, d, a, x[i+ 2], 23, -995338651);
-
-    a = ii(a, b, c, d, x[i+ 0], 6 , -198630844);
-    d = ii(d, a, b, c, x[i+ 7], 10,  1126891415);
-    c = ii(c, d, a, b, x[i+14], 15, -1416354905);
-    b = ii(b, c, d, a, x[i+ 5], 21, -57434055);
-    a = ii(a, b, c, d, x[i+12], 6 ,  1700485571);
-    d = ii(d, a, b, c, x[i+ 3], 10, -1894986606);
-    c = ii(c, d, a, b, x[i+10], 15, -1051523);
-    b = ii(b, c, d, a, x[i+ 1], 21, -2054922799);
-    a = ii(a, b, c, d, x[i+ 8], 6 ,  1873313359);
-    d = ii(d, a, b, c, x[i+15], 10, -30611744);
-    c = ii(c, d, a, b, x[i+ 6], 15, -1560198380);
-    b = ii(b, c, d, a, x[i+13], 21,  1309151649);
-    a = ii(a, b, c, d, x[i+ 4], 6 , -145523070);
-    d = ii(d, a, b, c, x[i+11], 10, -1120210379);
-    c = ii(c, d, a, b, x[i+ 2], 15,  718787259);
-    b = ii(b, c, d, a, x[i+ 9], 21, -343485551);
-
-    a = add(a, olda);
-    b = add(b, oldb);
-    c = add(c, oldc);
-    d = add(d, oldd);
-  }
-  return rhex(a) + rhex(b) + rhex(c) + rhex(d);
-}
- 
-function b64_md5_digest(str) {
-	str = calcMD5(str);
-	var digest = '';
-	for (var i = 0; i < 32; i+= 2) {
-		digest += String.fromCharCode(parseInt(str.slice(i, i + 2), 16));
-	}
-	return Base64.encode(digest);
-}
- 
-
-
-if (typeof exports !== 'undefined') {
-	exports.aes = Aes.Ctr;
-	exports.sha1 = Sha1.hash;
-	exports.base64 = Base64;
-	exports.utf8 = Utf8;
-	
-	exports.hex_sha1 = hex_sha1;
-	exports.b64_sha1 = b64_sha1;
-	exports.str_sha1 = str_sha1;
-	exports.hex_hmac_sha1 = hex_hmac_sha1;
-	exports.b64_hmac_sha1 = b64_hmac_sha1;
-	exports.str_hmac_sha1 = str_hmac_sha1;
-	exports.md5 = calcMD5;
-	exports.b64_md5_digest = b64_md5_digest;
-}
-});
-
-require.addModuleClosure("promise", function(require, exports, module) {
-/**
- * The promise of a an action to be fulfilled with methods to respond to that action after it is finished. The action
- * may happen synchronously or asynchrously.
- */
-function Promise() {
-	
-}
-
-Promise.prototype = {
-	/**
-	 * Allows responding to an action once it is fulfilled or has failed. Allows responding to progress updates as well.
-	 * A promise may or may not choose to provide progress updates.
-	 * 
-	 * @param {Function} fulfilledHandler A function which will be called with the results of the promise when fulfiled.
-	 * @param {Function} failedHandler A function which will be called with the error of the promise when failed.
-	 * @param {Function} progressHandler A function which will be called with progress information.
-	 * @return {Promise} A new promise that provides the results of the fulfilledHandler or failedHandler. If these
-	 * handlers return a promise then the new promise will wait until their promise is finished.
-	 */
-	then: function(fulfilledHandler, failedHandler, progressHandler) {
-		throw new TypeError('The Promise base class is abstract, this function must be implemented by the Promise implementation');
-	},
-	
-	/**
-	 * Specific method for only passing a fulfilled handler.
-	 * 
-	 * @param handler
-	 */
-	fulfilled: function(handler) {
-		return this.then(handler);
-	},
-	
-	/**
-	 * Specific method for only passing a failed handler.
-	 * 
-	 * @param handler
-	 */
-	failed: function(handler) {
-		return this.then(null, handler);
-	},
-	
-	/**
-	 * Specific method for only passing a progress handler.
-	 * 
-	 * @param handler
-	 */
-	progress: function(handler) {
-		return this.then(null, null, handler);
-	},
-	
-	/**
-	 * Apply the promise's result array to the handler optionally providing a context. 
-	 * 
-	 * @param handler Fulfilled handler
-	 * @param [context] Optional context object
-	 */
-	apply: function(handler, context) {
-		return this.then(function(result) {
-			if (result instanceof Array) return handler.apply(context, result);
-			else return handler.call(context, result);
-		});
-	},
-	
-	/**
-	 * Allows the cancellation of a promise. Some promises are cancelable and so this method may be created on
-	 * subclasses of Promise to allow a consumer of the promise to cancel it.
-	 * 
-	 * @return {String|Error} Error string or object to provide to failedHandlers
-	 */
-//	cancel: function() {
-//		return 'Promise aborted';
-//	},
-
-	/**
-	 * A shortcut to return the value of a property from the returned promise results. The same as providing your own
-	 * <code>.then(function(obj) { return obj.propertyName; });</code> method.
-	 * 
-	 * @param {String} propertyName The name of the property to return
-	 * @return {Promise} The new promise for the property value
-	 */
-	get: function(propertyName){
-		return this.then(function(object){
-			return object[propertyName];
-		});
-	},
-	
-	/**
-	 * A shortcut to set the property from the returned promise results to a certain value. The same as providing your
-	 * own <code>.then(function(obj) { obj.propertyName = value; return obj; });</code> method. This returns the
-	 * original promise results after setting the property as opposed to <code>put</code> which returns the value which
-	 * was set.
-	 * 
-	 * @param {String} propertyName The name of the property to set
-	 * @param {mixed} value The value for the property to be set to
-	 * @return {Promise} A new promise with the original results
-	 */
-	set: function(propertyName, value){
-		return this.then(function(object){
-			object[propertyName] = value;
-			return object;
-		});
-	},
-	
-	/**
-	 * A shortcut to set the property from the returned promise results to a certain value. The same as providing your
-	 * own <code>.then(function(obj) { return obj.propertyName = value; });</code> method. This returns the new value
-	 * after setting the property as opposed to <code>set</code> which returns the original promise results.
-	 * 
-	 * @param {String} propertyName The name of the property to set
-	 * @param {mixed} value The value for the property to be set to
-	 * @return {Promise} A new promise with the value
-	 */
-	put: function(propertyName, value){
-		return this.then(function(object){
-			return object[propertyName] = value;
-		});
-	},
-	
-	/**
-	 * A shortcut to call a method on the returned promise results. The same as providing your own
-	 * <code>.then(function(obj) { obj.functionName(); return obj; });</code> method. This returns the original results
-	 * after calling the function as opposed to <code>call</code> which returns the function's results.
-	 * 
-	 * @param {String} functionName The name of the function to call
-	 * @param {mixed} [...arguments] Zero or more arguments to pass to the function
-	 * @return {Promise} A new promise with the original results
-	 */
-	run: function(functionName /*, args */){
-		return this.then(function(object){
-			object[functionName].apply(object, Array.prototype.slice.call(arguments, 1));
-			return object;
-		});
-	},
-	
-	/**
-	 * A shortcut to call a method on the returned promise results. The same as providing your own
-	 * <code>.then(function(obj) { return obj.functionName(); });</code> method. This returns the function's results
-	 * after calling the function as opposed to <code>run</code> which returns the original results.
-	 * 
-	 * @param {String} functionName The name of the function to call
-	 * @param {mixed} [...arguments] Zero or more arguments to pass to the function
-	 * @return {Promise} A new promise with the original results
-	 */
-	call: function(functionName /*, args */){
-		return this.then(function(object){
-			return object[functionName].apply(object, Array.prototype.slice.call(arguments, 1));
-		});
-	}
-};
-
-
-/**
- * Combines one or more methods behind a promise. If the methods return a promise <code>when</code> will wait until they
- * are finished to complete its promise.
+ * A basic class system which puts a nicer syntax onto the native JavaScript prototype class creation. By
+ * passing an object in the constructor of Class() you may defined the methods and constructor of your new class. Two
+ * special properties may be defined, constructor, extend, and implement. Set constructor to the function that will be
+ * called as the constructor of your class (note, this IS your class as well). Set extend to the parent class your new
+ * class is extending. Set implement to either a one class or an array of classes which will have their functionality
+ * copied over onto this new classes' definition. Note that objects of your new class type will be instances of the
+ * parent in extend, but not in implement.
  * 
  * Example:
- * <code>when(method1(), method2()).then(function(result1, result2) {</code>
- * <code>    // both methods have finished and the results from their promises are available</code>
- * <code>});</code>
+ * var MyClass = new Class({
+ *     extend: ParentClass,
+ *     implement: ImplClass,
+ *     constructor: function() {
+ *         this.foo = 'bar';
+ *     }
+ * });
  * 
- * @param obj
+ * var obj = new MyClass();
+ * alert(obj instanceof ParentClass); // true
+ * alert(obj instanceof ImplClass); // false, though will have all the functions defined on ImplClass
+ * alert(obj.constructor == MyClass); // true
+ * 
+ * @param implementation An object with the implementation of the class.
  */
-function when(obj) {
-	var deferred = new Deferred();
+function Class(def, statics) {
+	if (arguments.length == 0) {
+        def = {};
+    }
+	var implement = def.hasOwnProperty('implement') ? def.implement : null,
+		extend = def.hasOwnProperty('extend') ? def.extend : Object,
+		constructor = def.hasOwnProperty('constructor')
+				? def.constructor
+				: def.constructor = function() {extend.apply(this, arguments)};
 	
-	var args = Array.prototype.slice.call(arguments),
-		count = args.length,
-		createCallback = function(index) {
-			return function(value) {
-				args[index] = arguments.length > 1 ? Array.prototype.slice.call(arguments) : value;
-				if (--count == 0) {
-					deferred.fulfill.apply(null, args);
-				}
-			};
-		};
+    delete def.extend;
+    delete def.implement;
 	
-	for (var i = 0, l = args.length; i < l; i++) {
-		obj = args[i];
-		if (obj && typeof obj.then === 'function') {
-			obj.then(createCallback(i), deferred.fail);
-		} else {
-			--count;
+	// add implement first so definition can override it
+	var proto;
+	if (implement instanceof Array) {
+		for (var i = 0, l = implement.length; i < l; i++) {
+			proto = typeof implement[i] === 'function' ? implement[i].prototype : implement[i];
+			copy(constructor.prototype, proto);
 		}
+	} else if (implement) {
+		proto = typeof implement === 'function' ? implement.prototype : implement;
+		copy(constructor.prototype, proto);
 	}
-	if (count == 0) {
-		deferred.fulfill.apply(null, args);
+	
+	// Copy the properties over onto the new prototype
+	constructor.prototype = Object.create(extend.prototype);
+	copy(constructor.prototype, def);
+	
+	if (statics) {
+		copy(constructor, statics);
 	}
-	return deferred.promise;
+	
+	return constructor;
 }
 
-
-/**
- * Represents a deferred action with an associated promise.
- * 
- * @param promise Allow for custom promises to be used with deferred.
- */
-function Deferred(promise) {
-	this.status = 'unfulfilled';
-	this.progressHandlers = [];
-	this.handlers = [];
-	promise = this.promise = promise || new Promise();
-	var cancel = promise.cancel, self = this;
-	if (cancel) {
-		promise.cancel = function() {
-			var error = cancel.apply(promise, arguments);
-			self.fail(error);
-		};
-	}
-	promise.then = this.then = this.then.bind(this);
-	this.fulfill = this.fulfill.bind(this);
-	this.fail = this.fail.bind(this);
-	this.progress = this.progress.bind(this);
-}
-
-//closure to keep privates out of the public scope
-(function() {
-
-Deferred.prototype = {
-	constructor: Deferred,
-	
-	then: function(fulfilledHandler, failedHandler, progressHandler) {
-		if (progressHandler) this.progressHandlers.push(progressHandler);
-		var nextDeferred = new Deferred();
-		var handler = { fulfilled: fulfilledHandler, failed: failedHandler, nextDeferred: nextDeferred };
-		
-		if (this.status != 'unfulfilled') {
-			notify.call(this, handler);
-		} else {
-			this.handlers.push(handler);
+Class.convert = function(obj, type) {
+	if (obj.__proto__) { // cheaper method to make an object a given type/class
+		obj.__proto__ = type.prototype;
+		type.call(obj);
+	} else { // IE copy everything over
+		var newObj = new type();
+		for (var i in obj) {
+			newObj[i] = obj[i];
 		}
-		return nextDeferred.promise;
-	},
-	
-	fulfill: function(result) {
-		finish.call(this, 'fulfilled', Array.prototype.slice.call(arguments));
-		return this;
-	},
-	
-	fail: function(error) {
-		finish.call(this, 'failed', Array.prototype.slice.call(arguments));
-		return this;
-	},
-	
-	progress: function(info) {
-		var progress = this.progressHandlers;
-		for (var i = 0, l = progress.length; i < l; i++) {
-			progress[i].apply(null, arguments);
-		}
-		return this;
-	},
-	
-	timeout: function(milliseconds, error) {
-		clearTimeout(this._timeout);
-		var self = this;
-		this._timeout = setTimeout(function() {
-			self.fail(error || new Error('Operation timed out'));
-		}, milliseconds);
+		obj = newObj;
 	}
+	return obj;
 };
 
-// private method to finish the promise
-function finish(status, results) {
-	if (this.status != 'unfulfilled') return;//throw new Error('Deferred has already been ' + this.status);
-	clearTimeout(this._timeout);
-	this.status = status;
-	this.results = results;
-	var handlers = this.handlers;
-	for (var i = 0, l = handlers.length; i < l; i++) {
-		notify.call(this, handlers[i]);
+function copy(target, source) {
+	for (var i in source) {
+		if (source.hasOwnProperty(i)) {
+			target[i] = source[i];
+		}
 	}
-}
-
-// private method to notify the hanlder
-function notify(handler) {
-	var results = this.results,
-		method = handler[this.status],
-		deferred = handler.nextDeferred;
-	
-	// pass along the error/result
-	if (!method) {
-		deferred[this.status.slice(0, -2)].apply(null, results);
-		return;
-	}
-	
-	// run the then
-	try {
-		var nextResult = method.apply(null, results);
-	} catch(error) {
-		nextResult = error;
-	}
-	
-	if (nextResult && typeof nextResult.then === 'function') {
-		nextResult.then(deferred.fulfill, deferred.fail);
-	} else if (nextResult instanceof Error) {
-		deferred.fail(nextResult);
-	} else {
-		deferred.fulfill(nextResult);
-	}
-}
-
-})();
-
-
-if (!Function.prototype.bind) {
-	Function.prototype.bind = function(obj) {
-		var slice = Array.prototype.slice,
-			args = slice.call(arguments, 1), 
-			self = this, 
-			nop = function () {}, 
-			bound = function () {
-				return self.apply(this instanceof nop ? this : (obj || {}), args.concat(slice.call(arguments)));    
-			};
-		nop.prototype = self.prototype;
-		bound.prototype = new nop();
-		return bound;
-	};
 }
 
 if (typeof exports !== 'undefined') {
-	exports.Deferred = Deferred;
-	exports.Promise = Promise;
-	exports.when = when;
+	exports.Class = Class;
+	exports.copy = copy;
 }
 });
 
@@ -3493,89 +2301,1333 @@ require.addModuleClosure("backbone", function(require, exports, module) {
 
 });
 
-require.addModuleClosure("class", function(require, exports, module) {
-
+require.addModuleClosure("promise", function(require, exports, module) {
 /**
- * A basic class system which puts a nicer syntax onto the native JavaScript prototype class creation. By
- * passing an object in the constructor of Class() you may defined the methods and constructor of your new class. Two
- * special properties may be defined, constructor, extend, and implement. Set constructor to the function that will be
- * called as the constructor of your class (note, this IS your class as well). Set extend to the parent class your new
- * class is extending. Set implement to either a one class or an array of classes which will have their functionality
- * copied over onto this new classes' definition. Note that objects of your new class type will be instances of the
- * parent in extend, but not in implement.
- * 
- * Example:
- * var MyClass = new Class({
- *     extend: ParentClass,
- *     implement: ImplClass,
- *     constructor: function() {
- *         this.foo = 'bar';
- *     }
- * });
- * 
- * var obj = new MyClass();
- * alert(obj instanceof ParentClass); // true
- * alert(obj instanceof ImplClass); // false, though will have all the functions defined on ImplClass
- * alert(obj.constructor == MyClass); // true
- * 
- * @param implementation An object with the implementation of the class.
+ * The promise of a an action to be fulfilled with methods to respond to that action after it is finished. The action
+ * may happen synchronously or asynchrously.
  */
-function Class(def, statics) {
-	if (arguments.length == 0) {
-        def = {};
-    }
-	var implement = def.implement,
-		extend = def.extend || Object,
-		constructor = def.constructor || function() {parent.apply(this, arguments)};
+function Promise() {
 	
-    delete def.extend;
-    delete def.implement;
-	
-	// add implement first so definition can override it
-	if (implement instanceof Array) {
-		for (var i = 0, l = implement.length; i < l; i++) {
-			copy(constructor.prototype, implement[i].prototype);
-		}
-	} else if (implement) {
-		copy(constructor.prototype, implement[i].prototype);
-	}
-	
-	// Copy the properties over onto the new prototype
-	constructor.prototype = Object.create(extend.prototype);
-	copy(constructor.prototype, def);
-	
-	if (statics) {
-		copy(constructor, statics);
-	}
-	
-	return constructor;
 }
 
-Class.convert = function(obj, type) {
-	if (obj.__proto__) { // cheaper method to make an object a given type/class
-		obj.__proto__ = type.prototype;
-		type.call(obj);
-	} else { // IE copy everything over
-		var newObj = new type();
-		for (var i in obj) {
-			newObj[i] = obj[i];
-		}
-		obj = newObj;
+Promise.prototype = {
+	/**
+	 * Allows responding to an action once it is fulfilled or has failed. Allows responding to progress updates as well.
+	 * A promise may or may not choose to provide progress updates.
+	 * 
+	 * @param {Function} fulfilledHandler A function which will be called with the results of the promise when fulfiled.
+	 * @param {Function} failedHandler A function which will be called with the error of the promise when failed.
+	 * @param {Function} progressHandler A function which will be called with progress information.
+	 * @return {Promise} A new promise that provides the results of the fulfilledHandler or failedHandler. If these
+	 * handlers return a promise then the new promise will wait until their promise is finished.
+	 */
+	then: function(fulfilledHandler, failedHandler, progressHandler) {
+		throw new TypeError('The Promise base class is abstract, this function must be implemented by the Promise implementation');
+	},
+	
+	/**
+	 * Specific method for only passing a fulfilled handler.
+	 * 
+	 * @param handler
+	 */
+	fulfilled: function(handler) {
+		return this.then(handler);
+	},
+	
+	/**
+	 * Specific method for only passing a failed handler.
+	 * 
+	 * @param handler
+	 */
+	failed: function(handler) {
+		return this.then(null, handler);
+	},
+	
+	/**
+	 * Specific method for only passing a progress handler.
+	 * 
+	 * @param handler
+	 */
+	progress: function(handler) {
+		return this.then(null, null, handler);
+	},
+	
+	/**
+	 * Apply the promise's result array to the handler optionally providing a context. 
+	 * 
+	 * @param handler Fulfilled handler
+	 * @param [context] Optional context object
+	 */
+	apply: function(handler, context) {
+		return this.then(function(result) {
+			if (result instanceof Array) return handler.apply(context, result);
+			else return handler.call(context, result);
+		});
+	},
+	
+	/**
+	 * Allows the cancellation of a promise. Some promises are cancelable and so this method may be created on
+	 * subclasses of Promise to allow a consumer of the promise to cancel it.
+	 * 
+	 * @return {String|Error} Error string or object to provide to failedHandlers
+	 */
+	cancel: function() {
+		return 'Promise canceled';
+	},
+
+	/**
+	 * A shortcut to return the value of a property from the returned promise results. The same as providing your own
+	 * <code>.then(function(obj) { return obj.propertyName; });</code> method.
+	 * 
+	 * @param {String} propertyName The name of the property to return
+	 * @return {Promise} The new promise for the property value
+	 */
+	get: function(propertyName) {
+		return this.then(function(object) {
+			return object[propertyName];
+		});
+	},
+	
+	/**
+	 * A shortcut to set the property from the returned promise results to a certain value. The same as providing your
+	 * own <code>.then(function(obj) { obj.propertyName = value; return obj; });</code> method. This returns the
+	 * original promise results after setting the property as opposed to <code>put</code> which returns the value which
+	 * was set.
+	 * 
+	 * @param {String} propertyName The name of the property to set
+	 * @param {mixed} value The value for the property to be set to
+	 * @return {Promise} A new promise with the original results
+	 */
+	set: function(propertyName, value) {
+		return this.then(function(object) {
+			object[propertyName] = value;
+			return object;
+		});
+	},
+	
+	/**
+	 * A shortcut to set the property from the returned promise results to a certain value. The same as providing your
+	 * own <code>.then(function(obj) { return obj.propertyName = value; });</code> method. This returns the new value
+	 * after setting the property as opposed to <code>set</code> which returns the original promise results.
+	 * 
+	 * @param {String} propertyName The name of the property to set
+	 * @param {mixed} value The value for the property to be set to
+	 * @return {Promise} A new promise with the value
+	 */
+	put: function(propertyName, value) {
+		return this.then(function(object) {
+			return object[propertyName] = value;
+		});
+	},
+	
+	/**
+	 * A shortcut to call a method on the returned promise results. The same as providing your own
+	 * <code>.then(function(obj) { obj.functionName(); return obj; });</code> method. This returns the original results
+	 * after calling the function as opposed to <code>call</code> which returns the function's results.
+	 * 
+	 * @param {String} functionName The name of the function to call
+	 * @param {mixed} [...arguments] Zero or more arguments to pass to the function
+	 * @return {Promise} A new promise with the original results
+	 */
+	run: function(functionName /*, args */) {
+		return this.then(function(object) {
+			object[functionName].apply(object, Array.prototype.slice.call(arguments, 1));
+			return object;
+		});
+	},
+	
+	/**
+	 * A shortcut to call a method on the returned promise results. The same as providing your own
+	 * <code>.then(function(obj) { return obj.functionName(); });</code> method. This returns the function's results
+	 * after calling the function as opposed to <code>run</code> which returns the original results.
+	 * 
+	 * @param {String} functionName The name of the function to call
+	 * @param {mixed} [...arguments] Zero or more arguments to pass to the function
+	 * @return {Promise} A new promise with the original results
+	 */
+	call: function(functionName /*, args */) {
+		return this.then(function(object) {
+			return object[functionName].apply(object, Array.prototype.slice.call(arguments, 1));
+		});
 	}
-	return obj;
 };
 
-function copy(target, source) {
-	for (var i in source) {
-		if (source.hasOwnProperty(i)) {
-			target[i] = source[i];
+
+/**
+ * Combines one or more methods behind a promise. If the methods return a promise <code>when</code> will wait until they
+ * are finished to complete its promise.
+ * 
+ * Example:
+ * <code>when(method1(), method2()).then(function(result1, result2) {</code>
+ * <code>    // both methods have finished and the results from their promises are available</code>
+ * <code>});</code>
+ * 
+ * @param obj
+ */
+function when(obj) {
+	var deferred = new Deferred();
+	if (arguments.length <= 1) return deferred.fulfill(obj).promise;
+	
+	var args = Array.prototype.slice.call(arguments),
+		count = args.length,
+		createCallback = function(index) {
+			return function(value) {
+				args[index] = value;
+				if (--count == 0) {
+					deferred.fulfill.apply(null, args);
+				}
+			};
+		};
+	
+	for (var i = 0, l = args.length; i < l; i++) {
+		obj = args[i];
+		if (obj && typeof obj.then === 'function') {
+			obj.then(createCallback(i), deferred.fail);
+		} else {
+			--count;
 		}
 	}
+	if (count == 0) {
+		deferred.fulfill.apply(null, args);
+	}
+	return deferred.promise;
+}
+
+
+/**
+ * Represents a deferred action with an associated promise.
+ * 
+ * @param promise Allow for custom promises to be used with deferred.
+ */
+function Deferred(promise) {
+	this.status = 'unfulfilled';
+	this.progressHandlers = [];
+	this.handlers = [];
+	promise = this.promise = promise || new Deferred.Promise();
+	var cancel = promise.cancel, self = this;
+	if (cancel) {
+		promise.cancel = function() {
+			var error = cancel.apply(promise, arguments);
+			self.fail(error);
+		};
+	}
+	promise.then = this.then = this.then.bind(this);
+	this.fulfill = this.fulfill.bind(this);
+	this.fail = this.fail.bind(this);
+	this.progress = this.progress.bind(this);
+}
+
+//closure to keep privates out of the public scope
+(function() {
+
+Deferred.prototype = {
+	constructor: Deferred,
+	
+	then: function(fulfilledHandler, failedHandler, progressHandler) {
+		if (progressHandler) this.progressHandlers.push(progressHandler);
+		var nextDeferred = new Deferred();
+		var handler = { fulfilled: fulfilledHandler, failed: failedHandler, nextDeferred: nextDeferred };
+		
+		if (this.finished()) {
+			notify.call(this, handler);
+		} else {
+			this.handlers.push(handler);
+		}
+		return nextDeferred.promise;
+	},
+	
+	finished: function() {
+		return this.status != 'unfulfilled';
+	},
+			
+	fulfill: function(result) {
+		finish.call(this, 'fulfilled', Array.prototype.slice.call(arguments));
+		return this;
+	},
+	
+	fail: function(error) {
+		finish.call(this, 'failed', Array.prototype.slice.call(arguments));
+		return this;
+	},
+	
+	progress: function(info) {
+		var progress = this.progressHandlers;
+		for (var i = 0, l = progress.length; i < l; i++) {
+			progress[i].apply(null, arguments);
+		}
+		return this;
+	},
+	
+	timeout: function(milliseconds, error) {
+		clearTimeout(this._timeout);
+		var self = this;
+		this._timeout = setTimeout(function() {
+			self.fail(error || new Error('Operation timed out'));
+		}, milliseconds);
+	}
+};
+
+// private method to finish the promise
+function finish(status, results) {
+	if (this.status != 'unfulfilled') return;//throw new Error('Deferred has already been ' + this.status);
+	clearTimeout(this._timeout);
+	this.status = status;
+	this.results = results;
+	var handlers = this.handlers;
+	for (var i = 0, l = handlers.length; i < l; i++) {
+		notify.call(this, handlers[i]);
+	}
+}
+
+// private method to notify the hanlder
+function notify(handler) {
+	var results = this.results,
+		method = handler[this.status],
+		deferred = handler.nextDeferred;
+	
+	// pass along the error/result
+	if (!method) {
+		deferred[this.status.slice(0, -2)].apply(null, results);
+		return;
+	}
+	
+	// run the then
+	var nextResult = method.apply(null, results);
+	
+	if (nextResult && typeof nextResult.then === 'function') {
+		nextResult.then(deferred.fulfill, deferred.fail);
+	} else if (nextResult instanceof Error) {
+		deferred.fail(nextResult);
+	} else {
+		deferred.fulfill(nextResult);
+	}
+}
+
+Deferred.Promise = Promise; // default promise implementation
+
+})();
+
+
+if (!Function.prototype.bind) {
+	Function.prototype.bind = function(obj) {
+		var slice = Array.prototype.slice,
+			args = slice.call(arguments, 1), 
+			self = this, 
+			nop = function () {}, 
+			bound = function () {
+				return self.apply(this instanceof nop ? this : (obj || {}), args.concat(slice.call(arguments)));    
+			};
+		nop.prototype = self.prototype;
+		bound.prototype = new nop();
+		return bound;
+	};
 }
 
 if (typeof exports !== 'undefined') {
-	exports.Class = Class;
-	exports.copy = copy;
+	exports.Deferred = Deferred;
+	exports.Promise = Promise;
+	exports.when = when;
+}
+
+});
+
+require.addModuleClosure("crypto", function(require, exports, module) {
+/* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  */
+/*  AES implementation in JavaScript (c) Chris Veness 2005-2011                                   */
+/*   - see http://csrc.nist.gov/publications/PubsFIPS.html#197                                    */
+/* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  */
+
+var Aes = {};  // Aes namespace
+
+/**
+ * AES Cipher function: encrypt 'input' state with Rijndael algorithm
+ *   applies Nr rounds (10/12/14) using key schedule w for 'add round key' stage
+ *
+ * @param {Number[]} input 16-byte (128-bit) input state array
+ * @param {Number[][]} w   Key schedule as 2D byte-array (Nr+1 x Nb bytes)
+ * @returns {Number[]}     Encrypted output state array
+ */
+Aes.cipher = function(input, w) {    // main Cipher function [�5.1]
+  var Nb = 4;               // block size (in words): no of columns in state (fixed at 4 for AES)
+  var Nr = w.length/Nb - 1; // no of rounds: 10/12/14 for 128/192/256-bit keys
+
+  var state = [[],[],[],[]];  // initialise 4xNb byte-array 'state' with input [�3.4]
+  for (var i=0; i<4*Nb; i++) state[i%4][Math.floor(i/4)] = input[i];
+
+  state = Aes.addRoundKey(state, w, 0, Nb);
+
+  for (var round=1; round<Nr; round++) {
+    state = Aes.subBytes(state, Nb);
+    state = Aes.shiftRows(state, Nb);
+    state = Aes.mixColumns(state, Nb);
+    state = Aes.addRoundKey(state, w, round, Nb);
+  }
+
+  state = Aes.subBytes(state, Nb);
+  state = Aes.shiftRows(state, Nb);
+  state = Aes.addRoundKey(state, w, Nr, Nb);
+
+  var output = new Array(4*Nb);  // convert state to 1-d array before returning [�3.4]
+  for (var i=0; i<4*Nb; i++) output[i] = state[i%4][Math.floor(i/4)];
+  return output;
+};
+
+/**
+ * Perform Key Expansion to generate a Key Schedule
+ *
+ * @param {Number[]} key Key as 16/24/32-byte array
+ * @returns {Number[][]} Expanded key schedule as 2D byte-array (Nr+1 x Nb bytes)
+ */
+Aes.keyExpansion = function(key) {  // generate Key Schedule (byte-array Nr+1 x Nb) from Key [�5.2]
+  var Nb = 4;            // block size (in words): no of columns in state (fixed at 4 for AES)
+  var Nk = key.length/4  // key length (in words): 4/6/8 for 128/192/256-bit keys
+  var Nr = Nk + 6;       // no of rounds: 10/12/14 for 128/192/256-bit keys
+
+  var w = new Array(Nb*(Nr+1));
+  var temp = new Array(4);
+
+  for (var i=0; i<Nk; i++) {
+    var r = [key[4*i], key[4*i+1], key[4*i+2], key[4*i+3]];
+    w[i] = r;
+  }
+
+  for (var i=Nk; i<(Nb*(Nr+1)); i++) {
+    w[i] = new Array(4);
+    for (var t=0; t<4; t++) temp[t] = w[i-1][t];
+    if (i % Nk == 0) {
+      temp = Aes.subWord(Aes.rotWord(temp));
+      for (var t=0; t<4; t++) temp[t] ^= Aes.rCon[i/Nk][t];
+    } else if (Nk > 6 && i%Nk == 4) {
+      temp = Aes.subWord(temp);
+    }
+    for (var t=0; t<4; t++) w[i][t] = w[i-Nk][t] ^ temp[t];
+  }
+
+  return w;
+};
+
+/*
+ * ---- remaining routines are private, not called externally ----
+ */
+ 
+Aes.subBytes = function(s, Nb) {    // apply SBox to state S [�5.1.1]
+  for (var r=0; r<4; r++) {
+    for (var c=0; c<Nb; c++) s[r][c] = Aes.sBox[s[r][c]];
+  }
+  return s;
+};
+
+Aes.shiftRows = function(s, Nb) {    // shift row r of state S left by r bytes [�5.1.2]
+  var t = new Array(4);
+  for (var r=1; r<4; r++) {
+    for (var c=0; c<4; c++) t[c] = s[r][(c+r)%Nb];  // shift into temp copy
+    for (var c=0; c<4; c++) s[r][c] = t[c];         // and copy back
+  }          // note that this will work for Nb=4,5,6, but not 7,8 (always 4 for AES):
+  return s;  // see asmaes.sourceforge.net/rijndael/rijndaelImplementation.pdf
+};
+
+Aes.mixColumns = function(s, Nb) {   // combine bytes of each col of state S [�5.1.3]
+  for (var c=0; c<4; c++) {
+    var a = new Array(4);  // 'a' is a copy of the current column from 's'
+    var b = new Array(4);  // 'b' is a�{02} in GF(2^8)
+    for (var i=0; i<4; i++) {
+      a[i] = s[i][c];
+      b[i] = s[i][c]&0x80 ? s[i][c]<<1 ^ 0x011b : s[i][c]<<1;
+
+    }
+    // a[n] ^ b[n] is a�{03} in GF(2^8)
+    s[0][c] = b[0] ^ a[1] ^ b[1] ^ a[2] ^ a[3]; // 2*a0 + 3*a1 + a2 + a3
+    s[1][c] = a[0] ^ b[1] ^ a[2] ^ b[2] ^ a[3]; // a0 * 2*a1 + 3*a2 + a3
+    s[2][c] = a[0] ^ a[1] ^ b[2] ^ a[3] ^ b[3]; // a0 + a1 + 2*a2 + 3*a3
+    s[3][c] = a[0] ^ b[0] ^ a[1] ^ a[2] ^ b[3]; // 3*a0 + a1 + a2 + 2*a3
+  }
+  return s;
+};
+
+Aes.addRoundKey = function(state, w, rnd, Nb) {  // xor Round Key into state S [�5.1.4]
+  for (var r=0; r<4; r++) {
+    for (var c=0; c<Nb; c++) state[r][c] ^= w[rnd*4+c][r];
+  }
+  return state;
+};
+
+Aes.subWord = function(w) {    // apply SBox to 4-byte word w
+  for (var i=0; i<4; i++) w[i] = Aes.sBox[w[i]];
+  return w;
+};
+
+Aes.rotWord = function(w) {    // rotate 4-byte word w left by one byte
+  var tmp = w[0];
+  for (var i=0; i<3; i++) w[i] = w[i+1];
+  w[3] = tmp;
+  return w;
+};
+
+// sBox is pre-computed multiplicative inverse in GF(2^8) used in subBytes and keyExpansion [�5.1.1]
+Aes.sBox =  [0x63,0x7c,0x77,0x7b,0xf2,0x6b,0x6f,0xc5,0x30,0x01,0x67,0x2b,0xfe,0xd7,0xab,0x76,
+             0xca,0x82,0xc9,0x7d,0xfa,0x59,0x47,0xf0,0xad,0xd4,0xa2,0xaf,0x9c,0xa4,0x72,0xc0,
+             0xb7,0xfd,0x93,0x26,0x36,0x3f,0xf7,0xcc,0x34,0xa5,0xe5,0xf1,0x71,0xd8,0x31,0x15,
+             0x04,0xc7,0x23,0xc3,0x18,0x96,0x05,0x9a,0x07,0x12,0x80,0xe2,0xeb,0x27,0xb2,0x75,
+             0x09,0x83,0x2c,0x1a,0x1b,0x6e,0x5a,0xa0,0x52,0x3b,0xd6,0xb3,0x29,0xe3,0x2f,0x84,
+             0x53,0xd1,0x00,0xed,0x20,0xfc,0xb1,0x5b,0x6a,0xcb,0xbe,0x39,0x4a,0x4c,0x58,0xcf,
+             0xd0,0xef,0xaa,0xfb,0x43,0x4d,0x33,0x85,0x45,0xf9,0x02,0x7f,0x50,0x3c,0x9f,0xa8,
+             0x51,0xa3,0x40,0x8f,0x92,0x9d,0x38,0xf5,0xbc,0xb6,0xda,0x21,0x10,0xff,0xf3,0xd2,
+             0xcd,0x0c,0x13,0xec,0x5f,0x97,0x44,0x17,0xc4,0xa7,0x7e,0x3d,0x64,0x5d,0x19,0x73,
+             0x60,0x81,0x4f,0xdc,0x22,0x2a,0x90,0x88,0x46,0xee,0xb8,0x14,0xde,0x5e,0x0b,0xdb,
+             0xe0,0x32,0x3a,0x0a,0x49,0x06,0x24,0x5c,0xc2,0xd3,0xac,0x62,0x91,0x95,0xe4,0x79,
+             0xe7,0xc8,0x37,0x6d,0x8d,0xd5,0x4e,0xa9,0x6c,0x56,0xf4,0xea,0x65,0x7a,0xae,0x08,
+             0xba,0x78,0x25,0x2e,0x1c,0xa6,0xb4,0xc6,0xe8,0xdd,0x74,0x1f,0x4b,0xbd,0x8b,0x8a,
+             0x70,0x3e,0xb5,0x66,0x48,0x03,0xf6,0x0e,0x61,0x35,0x57,0xb9,0x86,0xc1,0x1d,0x9e,
+             0xe1,0xf8,0x98,0x11,0x69,0xd9,0x8e,0x94,0x9b,0x1e,0x87,0xe9,0xce,0x55,0x28,0xdf,
+             0x8c,0xa1,0x89,0x0d,0xbf,0xe6,0x42,0x68,0x41,0x99,0x2d,0x0f,0xb0,0x54,0xbb,0x16];
+
+// rCon is Round Constant used for the Key Expansion [1st col is 2^(r-1) in GF(2^8)] [�5.2]
+Aes.rCon = [ [0x00, 0x00, 0x00, 0x00],
+             [0x01, 0x00, 0x00, 0x00],
+             [0x02, 0x00, 0x00, 0x00],
+             [0x04, 0x00, 0x00, 0x00],
+             [0x08, 0x00, 0x00, 0x00],
+             [0x10, 0x00, 0x00, 0x00],
+             [0x20, 0x00, 0x00, 0x00],
+             [0x40, 0x00, 0x00, 0x00],
+             [0x80, 0x00, 0x00, 0x00],
+             [0x1b, 0x00, 0x00, 0x00],
+             [0x36, 0x00, 0x00, 0x00] ]; 
+
+
+/* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  */
+/*  AES Counter-mode implementation in JavaScript (c) Chris Veness 2005-2011                      */
+/*   - see http://csrc.nist.gov/publications/nistpubs/800-38a/sp800-38a.pdf                       */
+/* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  */
+
+Aes.Ctr = {};  // Aes.Ctr namespace: a subclass or extension of Aes
+
+/** 
+ * Encrypt a text using AES encryption in Counter mode of operation
+ *
+ * Unicode multi-byte character safe
+ *
+ * @param {String} plaintext Source text to be encrypted
+ * @param {String} password  The password to use to generate a key
+ * @param {Number} nBits     Number of bits to be used in the key (128, 192, or 256)
+ * @returns {string}         Encrypted text
+ */
+Aes.Ctr.encrypt = function(plaintext, password, nBits) {
+  var blockSize = 16;  // block size fixed at 16 bytes / 128 bits (Nb=4) for AES
+  if (!(nBits==128 || nBits==192 || nBits==256)) return '';  // standard allows 128/192/256 bit keys
+  plaintext = Utf8.encode(plaintext);
+  password = Utf8.encode(password);
+  //var t = new Date();  // timer
+        
+  // use AES itself to encrypt password to get cipher key (using plain password as source for key 
+  // expansion) - gives us well encrypted key
+  var nBytes = nBits/8;  // no bytes in key
+  var pwBytes = new Array(nBytes);
+  for (var i=0; i<nBytes; i++) {
+    pwBytes[i] = isNaN(password.charCodeAt(i)) ? 0 : password.charCodeAt(i);
+  }
+  var key = Aes.cipher(pwBytes, Aes.keyExpansion(pwBytes));  // gives us 16-byte key
+  key = key.concat(key.slice(0, nBytes-16));  // expand key to 16/24/32 bytes long
+
+  // initialise 1st 8 bytes of counter block with nonce (NIST SP800-38A �B.2): [0-1] = millisec, 
+  // [2-3] = random, [4-7] = seconds, together giving full sub-millisec uniqueness up to Feb 2106
+  var counterBlock = new Array(blockSize);
+  
+  var nonce = (new Date()).getTime();  // timestamp: milliseconds since 1-Jan-1970
+  var nonceMs = nonce%1000;
+  var nonceSec = Math.floor(nonce/1000);
+  var nonceRnd = Math.floor(Math.random()*0xffff);
+  
+  for (var i=0; i<2; i++) counterBlock[i]   = (nonceMs  >>> i*8) & 0xff;
+  for (var i=0; i<2; i++) counterBlock[i+2] = (nonceRnd >>> i*8) & 0xff;
+  for (var i=0; i<4; i++) counterBlock[i+4] = (nonceSec >>> i*8) & 0xff;
+  
+  // and convert it to a string to go on the front of the ciphertext
+  var ctrTxt = '';
+  for (var i=0; i<8; i++) ctrTxt += String.fromCharCode(counterBlock[i]);
+
+  // generate key schedule - an expansion of the key into distinct Key Rounds for each round
+  var keySchedule = Aes.keyExpansion(key);
+  
+  var blockCount = Math.ceil(plaintext.length/blockSize);
+  var ciphertxt = new Array(blockCount);  // ciphertext as array of strings
+  
+  for (var b=0; b<blockCount; b++) {
+    // set counter (block #) in last 8 bytes of counter block (leaving nonce in 1st 8 bytes)
+    // done in two stages for 32-bit ops: using two words allows us to go past 2^32 blocks (68GB)
+    for (var c=0; c<4; c++) counterBlock[15-c] = (b >>> c*8) & 0xff;
+    for (var c=0; c<4; c++) counterBlock[15-c-4] = (b/0x100000000 >>> c*8)
+
+    var cipherCntr = Aes.cipher(counterBlock, keySchedule);  // -- encrypt counter block --
+    
+    // block size is reduced on final block
+    var blockLength = b<blockCount-1 ? blockSize : (plaintext.length-1)%blockSize+1;
+    var cipherChar = new Array(blockLength);
+    
+    for (var i=0; i<blockLength; i++) {  // -- xor plaintext with ciphered counter char-by-char --
+      cipherChar[i] = cipherCntr[i] ^ plaintext.charCodeAt(b*blockSize+i);
+      cipherChar[i] = String.fromCharCode(cipherChar[i]);
+    }
+    ciphertxt[b] = cipherChar.join(''); 
+  }
+
+  // Array.join is more efficient than repeated string concatenation in IE
+  var ciphertext = ctrTxt + ciphertxt.join('');
+  ciphertext = Base64.encode(ciphertext);  // encode in base64
+  
+  //alert((new Date()) - t);
+  return ciphertext;
+};
+
+/** 
+ * Decrypt a text encrypted by AES in counter mode of operation
+ *
+ * @param {String} ciphertext Source text to be encrypted
+ * @param {String} password   The password to use to generate a key
+ * @param {Number} nBits      Number of bits to be used in the key (128, 192, or 256)
+ * @returns {String}          Decrypted text
+ */
+Aes.Ctr.decrypt = function(ciphertext, password, nBits) {
+  var blockSize = 16;  // block size fixed at 16 bytes / 128 bits (Nb=4) for AES
+  if (!(nBits==128 || nBits==192 || nBits==256)) return '';  // standard allows 128/192/256 bit keys
+  ciphertext = Base64.decode(ciphertext);
+  password = Utf8.encode(password);
+  //var t = new Date();  // timer
+  
+  // use AES to encrypt password (mirroring encrypt routine)
+  var nBytes = nBits/8;  // no bytes in key
+  var pwBytes = new Array(nBytes);
+  for (var i=0; i<nBytes; i++) {
+    pwBytes[i] = isNaN(password.charCodeAt(i)) ? 0 : password.charCodeAt(i);
+  }
+  var key = Aes.cipher(pwBytes, Aes.keyExpansion(pwBytes));
+  key = key.concat(key.slice(0, nBytes-16));  // expand key to 16/24/32 bytes long
+
+  // recover nonce from 1st 8 bytes of ciphertext
+  var counterBlock = new Array(8);
+  ctrTxt = ciphertext.slice(0, 8);
+  for (var i=0; i<8; i++) counterBlock[i] = ctrTxt.charCodeAt(i);
+  
+  // generate key schedule
+  var keySchedule = Aes.keyExpansion(key);
+
+  // separate ciphertext into blocks (skipping past initial 8 bytes)
+  var nBlocks = Math.ceil((ciphertext.length-8) / blockSize);
+  var ct = new Array(nBlocks);
+  for (var b=0; b<nBlocks; b++) ct[b] = ciphertext.slice(8+b*blockSize, 8+b*blockSize+blockSize);
+  ciphertext = ct;  // ciphertext is now array of block-length strings
+
+  // plaintext will get generated block-by-block into array of block-length strings
+  var plaintxt = new Array(ciphertext.length);
+
+  for (var b=0; b<nBlocks; b++) {
+    // set counter (block #) in last 8 bytes of counter block (leaving nonce in 1st 8 bytes)
+    for (var c=0; c<4; c++) counterBlock[15-c] = ((b) >>> c*8) & 0xff;
+    for (var c=0; c<4; c++) counterBlock[15-c-4] = (((b+1)/0x100000000-1) >>> c*8) & 0xff;
+
+    var cipherCntr = Aes.cipher(counterBlock, keySchedule);  // encrypt counter block
+
+    var plaintxtByte = new Array(ciphertext[b].length);
+    for (var i=0; i<ciphertext[b].length; i++) {
+      // -- xor plaintxt with ciphered counter byte-by-byte --
+      plaintxtByte[i] = cipherCntr[i] ^ ciphertext[b].charCodeAt(i);
+      plaintxtByte[i] = String.fromCharCode(plaintxtByte[i]);
+    }
+    plaintxt[b] = plaintxtByte.join('');
+  }
+
+  // join array of blocks into single plaintext string
+  var plaintext = plaintxt.join('');
+  plaintext = Utf8.decode(plaintext);  // decode from UTF8 back to Unicode multi-byte chars
+  
+  //alert((new Date()) - t);
+  return plaintext;
+};
+
+/* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  */
+/*  SHA-1 implementation in JavaScript | (c) Chris Veness 2002-2010 | www.movable-type.co.uk      */
+/*   - see http://csrc.nist.gov/groups/ST/toolkit/secure_hashing.html                             */
+/*         http://csrc.nist.gov/groups/ST/toolkit/examples.html                                   */
+/* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  */
+
+var Sha1 = {};  // Sha1 namespace
+
+/**
+ * Generates SHA-1 hash of string
+ *
+ * @param {String} msg                String to be hashed
+ * @param {Boolean} [utf8encode=true] Encode msg as UTF-8 before generating hash
+ * @returns {String}                  Hash of msg as hex character string
+ */
+Sha1.hash = function(msg, utf8encode) {
+  utf8encode =  (typeof utf8encode == 'undefined') ? true : utf8encode;
+  
+  // convert string to UTF-8, as SHA only deals with byte-streams
+  if (utf8encode) msg = Utf8.encode(msg);
+  
+  // constants [�4.2.1]
+  var K = [0x5a827999, 0x6ed9eba1, 0x8f1bbcdc, 0xca62c1d6];
+  
+  // PREPROCESSING 
+  
+  msg += String.fromCharCode(0x80);  // add trailing '1' bit (+ 0's padding) to string [�5.1.1]
+  
+  // convert string msg into 512-bit/16-integer blocks arrays of ints [�5.2.1]
+  var l = msg.length/4 + 2;  // length (in 32-bit integers) of msg + �1� + appended length
+  var N = Math.ceil(l/16);   // number of 16-integer-blocks required to hold 'l' ints
+  var M = new Array(N);
+  
+  for (var i=0; i<N; i++) {
+    M[i] = new Array(16);
+    for (var j=0; j<16; j++) {  // encode 4 chars per integer, big-endian encoding
+      M[i][j] = (msg.charCodeAt(i*64+j*4)<<24) | (msg.charCodeAt(i*64+j*4+1)<<16) | 
+        (msg.charCodeAt(i*64+j*4+2)<<8) | (msg.charCodeAt(i*64+j*4+3));
+    } // note running off the end of msg is ok 'cos bitwise ops on NaN return 0
+  }
+  // add length (in bits) into final pair of 32-bit integers (big-endian) [�5.1.1]
+  // note: most significant word would be (len-1)*8 >>> 32, but since JS converts
+  // bitwise-op args to 32 bits, we need to simulate this by arithmetic operators
+  M[N-1][14] = ((msg.length-1)*8) / Math.pow(2, 32); M[N-1][14] = Math.floor(M[N-1][14])
+  M[N-1][15] = ((msg.length-1)*8) & 0xffffffff;
+  
+  // set initial hash value [�5.3.1]
+  var H0 = 0x67452301;
+  var H1 = 0xefcdab89;
+  var H2 = 0x98badcfe;
+  var H3 = 0x10325476;
+  var H4 = 0xc3d2e1f0;
+  
+  // HASH COMPUTATION [�6.1.2]
+  
+  var W = new Array(80); var a, b, c, d, e;
+  for (var i=0; i<N; i++) {
+  
+    // 1 - prepare message schedule 'W'
+    for (var t=0;  t<16; t++) W[t] = M[i][t];
+    for (var t=16; t<80; t++) W[t] = Sha1.ROTL(W[t-3] ^ W[t-8] ^ W[t-14] ^ W[t-16], 1);
+    
+    // 2 - initialise five working variables a, b, c, d, e with previous hash value
+    a = H0; b = H1; c = H2; d = H3; e = H4;
+    
+    // 3 - main loop
+    for (var t=0; t<80; t++) {
+      var s = Math.floor(t/20); // seq for blocks of 'f' functions and 'K' constants
+      var T = (Sha1.ROTL(a,5) + Sha1.f(s,b,c,d) + e + K[s] + W[t]) & 0xffffffff;
+      e = d;
+      d = c;
+      c = Sha1.ROTL(b, 30);
+      b = a;
+      a = T;
+    }
+    
+    // 4 - compute the new intermediate hash value
+    H0 = (H0+a) & 0xffffffff;  // note 'addition modulo 2^32'
+    H1 = (H1+b) & 0xffffffff; 
+    H2 = (H2+c) & 0xffffffff; 
+    H3 = (H3+d) & 0xffffffff; 
+    H4 = (H4+e) & 0xffffffff;
+  }
+
+  return Sha1.toHexStr(H0) + Sha1.toHexStr(H1) + 
+    Sha1.toHexStr(H2) + Sha1.toHexStr(H3) + Sha1.toHexStr(H4);
+};
+
+//
+// function 'f' [�4.1.1]
+//
+Sha1.f = function(s, x, y, z)  {
+  switch (s) {
+  case 0: return (x & y) ^ (~x & z);           // Ch()
+  case 1: return x ^ y ^ z;                    // Parity()
+  case 2: return (x & y) ^ (x & z) ^ (y & z);  // Maj()
+  case 3: return x ^ y ^ z;                    // Parity()
+  }
+};
+
+//
+// rotate left (circular left shift) value x by n positions [�3.2.5]
+//
+Sha1.ROTL = function(x, n) {
+  return (x<<n) | (x>>>(32-n));
+};
+
+//
+// hexadecimal representation of a number 
+//   (note toString(16) is implementation-dependant, and  
+//   in IE returns signed numbers when used on full words)
+//
+Sha1.toHexStr = function(n) {
+  var s="", v;
+  for (var i=7; i>=0; i--) { v = (n>>>(i*4)) & 0xf; s += v.toString(16); }
+  return s;
+};
+
+/* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  */
+/*  Base64 class: Base 64 encoding / decoding (c) Chris Veness 2002-2011                          */
+/*    note: depends on Utf8 class                                                                 */
+/* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  */
+
+var Base64 = {};  // Base64 namespace
+
+Base64.code = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
+
+/**
+ * Encode string into Base64, as defined by RFC 4648 [http://tools.ietf.org/html/rfc4648]
+ * (instance method extending String object). As per RFC 4648, no newlines are added.
+ *
+ * @param {String} str The string to be encoded as base-64
+ * @param {Boolean} [utf8encode=false] Flag to indicate whether str is Unicode string to be encoded 
+ *   to UTF8 before conversion to base64; otherwise string is assumed to be 8-bit characters
+ * @returns {String} Base64-encoded string
+ */ 
+Base64.encode = function(str, utf8encode) {  // http://tools.ietf.org/html/rfc4648
+  utf8encode =  (typeof utf8encode == 'undefined') ? false : utf8encode;
+  var o1, o2, o3, bits, h1, h2, h3, h4, e=[], pad = '', c, plain, coded;
+  var b64 = Base64.code;
+   
+  plain = utf8encode ? str.encodeUTF8() : str;
+  
+  c = plain.length % 3;  // pad string to length of multiple of 3
+  if (c > 0) { while (c++ < 3) { pad += '='; plain += '\0'; } }
+  // note: doing padding here saves us doing special-case packing for trailing 1 or 2 chars
+   
+  for (c=0; c<plain.length; c+=3) {  // pack three octets into four hexets
+    o1 = plain.charCodeAt(c);
+    o2 = plain.charCodeAt(c+1);
+    o3 = plain.charCodeAt(c+2);
+      
+    bits = o1<<16 | o2<<8 | o3;
+      
+    h1 = bits>>18 & 0x3f;
+    h2 = bits>>12 & 0x3f;
+    h3 = bits>>6 & 0x3f;
+    h4 = bits & 0x3f;
+
+    // use hextets to index into code string
+    e[c/3] = b64.charAt(h1) + b64.charAt(h2) + b64.charAt(h3) + b64.charAt(h4);
+  }
+  coded = e.join('');  // join() is far faster than repeated string concatenation in IE
+  
+  // replace 'A's from padded nulls with '='s
+  coded = coded.slice(0, coded.length-pad.length) + pad;
+   
+  return coded;
+};
+
+/**
+ * Decode string from Base64, as defined by RFC 4648 [http://tools.ietf.org/html/rfc4648]
+ * (instance method extending String object). As per RFC 4648, newlines are not catered for.
+ *
+ * @param {String} str The string to be decoded from base-64
+ * @param {Boolean} [utf8decode=false] Flag to indicate whether str is Unicode string to be decoded 
+ *   from UTF8 after conversion from base64
+ * @returns {String} decoded string
+ */ 
+Base64.decode = function(str, utf8decode) {
+  utf8decode =  (typeof utf8decode == 'undefined') ? false : utf8decode;
+  var o1, o2, o3, h1, h2, h3, h4, bits, d=[], plain, coded;
+  var b64 = Base64.code;
+
+  coded = utf8decode ? str.decodeUTF8() : str;
+  
+  
+  for (var c=0; c<coded.length; c+=4) {  // unpack four hexets into three octets
+    h1 = b64.indexOf(coded.charAt(c));
+    h2 = b64.indexOf(coded.charAt(c+1));
+    h3 = b64.indexOf(coded.charAt(c+2));
+    h4 = b64.indexOf(coded.charAt(c+3));
+      
+    bits = h1<<18 | h2<<12 | h3<<6 | h4;
+      
+    o1 = bits>>>16 & 0xff;
+    o2 = bits>>>8 & 0xff;
+    o3 = bits & 0xff;
+    
+    d[c/4] = String.fromCharCode(o1, o2, o3);
+    // check for padding
+    if (h4 == 0x40) d[c/4] = String.fromCharCode(o1, o2);
+    if (h3 == 0x40) d[c/4] = String.fromCharCode(o1);
+  }
+  plain = d.join('');  // join() is far faster than repeated string concatenation in IE
+   
+  return utf8decode ? plain.decodeUTF8() : plain; 
+};
+
+
+/* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  */
+/*  Utf8 class: encode / decode between multi-byte Unicode characters and UTF-8 multiple          */
+/*              single-byte character encoding (c) Chris Veness 2002-2011                         */
+/* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  */
+
+var Utf8 = {};  // Utf8 namespace
+
+/**
+ * Encode multi-byte Unicode string into utf-8 multiple single-byte characters 
+ * (BMP / basic multilingual plane only)
+ *
+ * Chars in range U+0080 - U+07FF are encoded in 2 chars, U+0800 - U+FFFF in 3 chars
+ *
+ * @param {String} strUni Unicode string to be encoded as UTF-8
+ * @returns {String} encoded string
+ */
+Utf8.encode = function(strUni) {
+  // use regular expressions & String.replace callback function for better efficiency 
+  // than procedural approaches
+  var strUtf = strUni.replace(
+      /[\u0080-\u07ff]/g,  // U+0080 - U+07FF => 2 bytes 110yyyyy, 10zzzzzz
+      function(c) { 
+        var cc = c.charCodeAt(0);
+        return String.fromCharCode(0xc0 | cc>>6, 0x80 | cc&0x3f); }
+    );
+  strUtf = strUtf.replace(
+      /[\u0800-\uffff]/g,  // U+0800 - U+FFFF => 3 bytes 1110xxxx, 10yyyyyy, 10zzzzzz
+      function(c) { 
+        var cc = c.charCodeAt(0); 
+        return String.fromCharCode(0xe0 | cc>>12, 0x80 | cc>>6&0x3F, 0x80 | cc&0x3f); }
+    );
+  return strUtf;
+};
+
+/**
+ * Decode utf-8 encoded string back into multi-byte Unicode characters
+ *
+ * @param {String} strUtf UTF-8 string to be decoded back to Unicode
+ * @returns {String} decoded string
+ */
+Utf8.decode = function(strUtf) {
+  // note: decode 3-byte chars first as decoded 2-byte strings could appear to be 3-byte char!
+  var strUni = strUtf.replace(
+      /[\u00e0-\u00ef][\u0080-\u00bf][\u0080-\u00bf]/g,  // 3-byte chars
+      function(c) {  // (note parentheses for precence)
+        var cc = ((c.charCodeAt(0)&0x0f)<<12) | ((c.charCodeAt(1)&0x3f)<<6) | ( c.charCodeAt(2)&0x3f); 
+        return String.fromCharCode(cc); }
+    );
+  strUni = strUni.replace(
+      /[\u00c0-\u00df][\u0080-\u00bf]/g,                 // 2-byte chars
+      function(c) {  // (note parentheses for precence)
+        var cc = (c.charCodeAt(0)&0x1f)<<6 | c.charCodeAt(1)&0x3f;
+        return String.fromCharCode(cc); }
+    );
+  return strUni;
+};
+
+/* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  */
+
+
+
+/*
+ * A JavaScript implementation of the Secure Hash Algorithm, SHA-1, as defined
+ * in FIPS PUB 180-1
+ * Version 2.1a Copyright Paul Johnston 2000 - 2002.
+ * Other contributors: Greg Holt, Andrew Kepert, Ydnar, Lostinet
+ * Distributed under the BSD License
+ * See http://pajhome.org.uk/crypt/md5 for details.
+ */
+
+/*
+ * Configurable variables. You may need to tweak these to be compatible with
+ * the server-side, but the defaults work in most cases.
+ */
+var hexcase = 0;  /* hex output format. 0 - lowercase; 1 - uppercase        */
+var b64pad  = "="; /* base-64 pad character. "=" for strict RFC compliance   */
+var chrsz   = 8;  /* bits per input character. 8 - ASCII; 16 - Unicode      */
+
+/*
+ * These are the functions you'll usually want to call
+ * They take string arguments and return either hex or base-64 encoded strings
+ */
+function hex_sha1(s){return binb2hex(core_sha1(str2binb(s),s.length * chrsz));}
+function b64_sha1(s){return binb2b64(core_sha1(str2binb(s),s.length * chrsz));}
+function str_sha1(s){return binb2str(core_sha1(str2binb(s),s.length * chrsz));}
+function hex_hmac_sha1(key, data){ return binb2hex(core_hmac_sha1(key, data));}
+function b64_hmac_sha1(key, data){ return binb2b64(core_hmac_sha1(key, data));}
+function str_hmac_sha1(key, data){ return binb2str(core_hmac_sha1(key, data));}
+
+/*
+ * Perform a simple self-test to see if the VM is working
+ */
+function sha1_vm_test()
+{
+  return hex_sha1("abc") == "a9993e364706816aba3e25717850c26c9cd0d89d";
+}
+
+/*
+ * Calculate the SHA-1 of an array of big-endian words, and a bit length
+ */
+function core_sha1(x, len)
+{
+  /* append padding */
+  x[len >> 5] |= 0x80 << (24 - len % 32);
+  x[((len + 64 >> 9) << 4) + 15] = len;
+
+  var w = Array(80);
+  var a =  1732584193;
+  var b = -271733879;
+  var c = -1732584194;
+  var d =  271733878;
+  var e = -1009589776;
+
+  for(var i = 0; i < x.length; i += 16)
+  {
+    var olda = a;
+    var oldb = b;
+    var oldc = c;
+    var oldd = d;
+    var olde = e;
+
+    for(var j = 0; j < 80; j++)
+    {
+      if(j < 16) w[j] = x[i + j];
+      else w[j] = rol(w[j-3] ^ w[j-8] ^ w[j-14] ^ w[j-16], 1);
+      var t = safe_add(safe_add(rol(a, 5), sha1_ft(j, b, c, d)),
+                       safe_add(safe_add(e, w[j]), sha1_kt(j)));
+      e = d;
+      d = c;
+      c = rol(b, 30);
+      b = a;
+      a = t;
+    }
+
+    a = safe_add(a, olda);
+    b = safe_add(b, oldb);
+    c = safe_add(c, oldc);
+    d = safe_add(d, oldd);
+    e = safe_add(e, olde);
+  }
+  return Array(a, b, c, d, e);
+
+}
+
+/*
+ * Perform the appropriate triplet combination function for the current
+ * iteration
+ */
+function sha1_ft(t, b, c, d)
+{
+  if(t < 20) return (b & c) | ((~b) & d);
+  if(t < 40) return b ^ c ^ d;
+  if(t < 60) return (b & c) | (b & d) | (c & d);
+  return b ^ c ^ d;
+}
+
+/*
+ * Determine the appropriate additive constant for the current iteration
+ */
+function sha1_kt(t)
+{
+  return (t < 20) ?  1518500249 : (t < 40) ?  1859775393 :
+         (t < 60) ? -1894007588 : -899497514;
+}
+
+/*
+ * Calculate the HMAC-SHA1 of a key and some data
+ */
+function core_hmac_sha1(key, data)
+{
+  var bkey = str2binb(key);
+  if(bkey.length > 16) bkey = core_sha1(bkey, key.length * chrsz);
+
+  var ipad = Array(16), opad = Array(16);
+  for(var i = 0; i < 16; i++)
+  {
+    ipad[i] = bkey[i] ^ 0x36363636;
+    opad[i] = bkey[i] ^ 0x5C5C5C5C;
+  }
+
+  var hash = core_sha1(ipad.concat(str2binb(data)), 512 + data.length * chrsz);
+  return core_sha1(opad.concat(hash), 512 + 160);
+}
+
+/*
+ * Add integers, wrapping at 2^32. This uses 16-bit operations internally
+ * to work around bugs in some JS interpreters.
+ */
+function safe_add(x, y)
+{
+  var lsw = (x & 0xFFFF) + (y & 0xFFFF);
+  var msw = (x >> 16) + (y >> 16) + (lsw >> 16);
+  return (msw << 16) | (lsw & 0xFFFF);
+}
+
+/*
+ * Bitwise rotate a 32-bit number to the left.
+ */
+function rol(num, cnt)
+{
+  return (num << cnt) | (num >>> (32 - cnt));
+}
+
+/*
+ * Convert an 8-bit or 16-bit string to an array of big-endian words
+ * In 8-bit function, characters >255 have their hi-byte silently ignored.
+ */
+function str2binb(str)
+{
+  var bin = Array();
+  var mask = (1 << chrsz) - 1;
+  for(var i = 0; i < str.length * chrsz; i += chrsz)
+    bin[i>>5] |= (str.charCodeAt(i / chrsz) & mask) << (32 - chrsz - i%32);
+  return bin;
+}
+
+/*
+ * Convert an array of big-endian words to a string
+ */
+function binb2str(bin)
+{
+  var str = "";
+  var mask = (1 << chrsz) - 1;
+  for(var i = 0; i < bin.length * 32; i += chrsz)
+    str += String.fromCharCode((bin[i>>5] >>> (32 - chrsz - i%32)) & mask);
+  return str;
+}
+
+/*
+ * Convert an array of big-endian words to a hex string.
+ */
+function binb2hex(binarray)
+{
+  var hex_tab = hexcase ? "0123456789ABCDEF" : "0123456789abcdef";
+  var str = "";
+  for(var i = 0; i < binarray.length * 4; i++)
+  {
+    str += hex_tab.charAt((binarray[i>>2] >> ((3 - i%4)*8+4)) & 0xF) +
+           hex_tab.charAt((binarray[i>>2] >> ((3 - i%4)*8  )) & 0xF);
+  }
+  return str;
+}
+
+/*
+ * Convert an array of big-endian words to a base-64 string
+ */
+function binb2b64(binarray)
+{
+  var tab = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  var str = "";
+  for(var i = 0; i < binarray.length * 4; i += 3)
+  {
+    var triplet = (((binarray[i   >> 2] >> 8 * (3 -  i   %4)) & 0xFF) << 16)
+                | (((binarray[i+1 >> 2] >> 8 * (3 - (i+1)%4)) & 0xFF) << 8 )
+                |  ((binarray[i+2 >> 2] >> 8 * (3 - (i+2)%4)) & 0xFF);
+    for(var j = 0; j < 4; j++)
+    {
+      if(i * 8 + j * 6 > binarray.length * 32) str += b64pad;
+      else str += tab.charAt((triplet >> 6*(3-j)) & 0x3F);
+    }
+  }
+  return str;
+}
+
+/* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  */
+
+
+/*
+ * A JavaScript implementation of the RSA Data Security, Inc. MD5 Message
+ * Digest Algorithm, as defined in RFC 1321.
+ * Copyright (C) Paul Johnston 1999 - 2000.
+ * Updated by Greg Holt 2000 - 2001.
+ * See http://pajhome.org.uk/site/legal.html for details.
+ */
+
+/*
+ * Convert a 32-bit number to a hex string with ls-byte first
+ */
+var hex_chr = "0123456789abcdef";
+function rhex(num)
+{
+  str = "";
+  for(j = 0; j <= 3; j++)
+    str += hex_chr.charAt((num >> (j * 8 + 4)) & 0x0F) +
+           hex_chr.charAt((num >> (j * 8)) & 0x0F);
+  return str;
+}
+
+/*
+ * Convert a string to a sequence of 16-word blocks, stored as an array.
+ * Append padding bits and the length, as described in the MD5 standard.
+ */
+function str2blks_MD5(str)
+{
+  nblk = ((str.length + 8) >> 6) + 1;
+  blks = new Array(nblk * 16);
+  for(i = 0; i < nblk * 16; i++) blks[i] = 0;
+  for(i = 0; i < str.length; i++)
+    blks[i >> 2] |= str.charCodeAt(i) << ((i % 4) * 8);
+  blks[i >> 2] |= 0x80 << ((i % 4) * 8);
+  blks[nblk * 16 - 2] = str.length * 8;
+  return blks;
+}
+
+/*
+ * Add integers, wrapping at 2^32. This uses 16-bit operations internally 
+ * to work around bugs in some JS interpreters.
+ */
+function add(x, y)
+{
+  var lsw = (x & 0xFFFF) + (y & 0xFFFF);
+  var msw = (x >> 16) + (y >> 16) + (lsw >> 16);
+  return (msw << 16) | (lsw & 0xFFFF);
+}
+
+/*
+ * Bitwise rotate a 32-bit number to the left
+ */
+function rol(num, cnt)
+{
+  return (num << cnt) | (num >>> (32 - cnt));
+}
+
+/*
+ * These functions implement the basic operation for each round of the
+ * algorithm.
+ */
+function cmn(q, a, b, x, s, t)
+{
+  return add(rol(add(add(a, q), add(x, t)), s), b);
+}
+function ff(a, b, c, d, x, s, t)
+{
+  return cmn((b & c) | ((~b) & d), a, b, x, s, t);
+}
+function gg(a, b, c, d, x, s, t)
+{
+  return cmn((b & d) | (c & (~d)), a, b, x, s, t);
+}
+function hh(a, b, c, d, x, s, t)
+{
+  return cmn(b ^ c ^ d, a, b, x, s, t);
+}
+function ii(a, b, c, d, x, s, t)
+{
+  return cmn(c ^ (b | (~d)), a, b, x, s, t);
+}
+
+/*
+ * Take a string and return the hex representation of its MD5.
+ */
+function calcMD5(str)
+{
+  x = str2blks_MD5(str);
+  a =  1732584193;
+  b = -271733879;
+  c = -1732584194;
+  d =  271733878;
+
+  for(i = 0; i < x.length; i += 16)
+  {
+    olda = a;
+    oldb = b;
+    oldc = c;
+    oldd = d;
+
+    a = ff(a, b, c, d, x[i+ 0], 7 , -680876936);
+    d = ff(d, a, b, c, x[i+ 1], 12, -389564586);
+    c = ff(c, d, a, b, x[i+ 2], 17,  606105819);
+    b = ff(b, c, d, a, x[i+ 3], 22, -1044525330);
+    a = ff(a, b, c, d, x[i+ 4], 7 , -176418897);
+    d = ff(d, a, b, c, x[i+ 5], 12,  1200080426);
+    c = ff(c, d, a, b, x[i+ 6], 17, -1473231341);
+    b = ff(b, c, d, a, x[i+ 7], 22, -45705983);
+    a = ff(a, b, c, d, x[i+ 8], 7 ,  1770035416);
+    d = ff(d, a, b, c, x[i+ 9], 12, -1958414417);
+    c = ff(c, d, a, b, x[i+10], 17, -42063);
+    b = ff(b, c, d, a, x[i+11], 22, -1990404162);
+    a = ff(a, b, c, d, x[i+12], 7 ,  1804603682);
+    d = ff(d, a, b, c, x[i+13], 12, -40341101);
+    c = ff(c, d, a, b, x[i+14], 17, -1502002290);
+    b = ff(b, c, d, a, x[i+15], 22,  1236535329);    
+
+    a = gg(a, b, c, d, x[i+ 1], 5 , -165796510);
+    d = gg(d, a, b, c, x[i+ 6], 9 , -1069501632);
+    c = gg(c, d, a, b, x[i+11], 14,  643717713);
+    b = gg(b, c, d, a, x[i+ 0], 20, -373897302);
+    a = gg(a, b, c, d, x[i+ 5], 5 , -701558691);
+    d = gg(d, a, b, c, x[i+10], 9 ,  38016083);
+    c = gg(c, d, a, b, x[i+15], 14, -660478335);
+    b = gg(b, c, d, a, x[i+ 4], 20, -405537848);
+    a = gg(a, b, c, d, x[i+ 9], 5 ,  568446438);
+    d = gg(d, a, b, c, x[i+14], 9 , -1019803690);
+    c = gg(c, d, a, b, x[i+ 3], 14, -187363961);
+    b = gg(b, c, d, a, x[i+ 8], 20,  1163531501);
+    a = gg(a, b, c, d, x[i+13], 5 , -1444681467);
+    d = gg(d, a, b, c, x[i+ 2], 9 , -51403784);
+    c = gg(c, d, a, b, x[i+ 7], 14,  1735328473);
+    b = gg(b, c, d, a, x[i+12], 20, -1926607734);
+    
+    a = hh(a, b, c, d, x[i+ 5], 4 , -378558);
+    d = hh(d, a, b, c, x[i+ 8], 11, -2022574463);
+    c = hh(c, d, a, b, x[i+11], 16,  1839030562);
+    b = hh(b, c, d, a, x[i+14], 23, -35309556);
+    a = hh(a, b, c, d, x[i+ 1], 4 , -1530992060);
+    d = hh(d, a, b, c, x[i+ 4], 11,  1272893353);
+    c = hh(c, d, a, b, x[i+ 7], 16, -155497632);
+    b = hh(b, c, d, a, x[i+10], 23, -1094730640);
+    a = hh(a, b, c, d, x[i+13], 4 ,  681279174);
+    d = hh(d, a, b, c, x[i+ 0], 11, -358537222);
+    c = hh(c, d, a, b, x[i+ 3], 16, -722521979);
+    b = hh(b, c, d, a, x[i+ 6], 23,  76029189);
+    a = hh(a, b, c, d, x[i+ 9], 4 , -640364487);
+    d = hh(d, a, b, c, x[i+12], 11, -421815835);
+    c = hh(c, d, a, b, x[i+15], 16,  530742520);
+    b = hh(b, c, d, a, x[i+ 2], 23, -995338651);
+
+    a = ii(a, b, c, d, x[i+ 0], 6 , -198630844);
+    d = ii(d, a, b, c, x[i+ 7], 10,  1126891415);
+    c = ii(c, d, a, b, x[i+14], 15, -1416354905);
+    b = ii(b, c, d, a, x[i+ 5], 21, -57434055);
+    a = ii(a, b, c, d, x[i+12], 6 ,  1700485571);
+    d = ii(d, a, b, c, x[i+ 3], 10, -1894986606);
+    c = ii(c, d, a, b, x[i+10], 15, -1051523);
+    b = ii(b, c, d, a, x[i+ 1], 21, -2054922799);
+    a = ii(a, b, c, d, x[i+ 8], 6 ,  1873313359);
+    d = ii(d, a, b, c, x[i+15], 10, -30611744);
+    c = ii(c, d, a, b, x[i+ 6], 15, -1560198380);
+    b = ii(b, c, d, a, x[i+13], 21,  1309151649);
+    a = ii(a, b, c, d, x[i+ 4], 6 , -145523070);
+    d = ii(d, a, b, c, x[i+11], 10, -1120210379);
+    c = ii(c, d, a, b, x[i+ 2], 15,  718787259);
+    b = ii(b, c, d, a, x[i+ 9], 21, -343485551);
+
+    a = add(a, olda);
+    b = add(b, oldb);
+    c = add(c, oldc);
+    d = add(d, oldd);
+  }
+  return rhex(a) + rhex(b) + rhex(c) + rhex(d);
+}
+ 
+function b64_md5_digest(str) {
+	str = calcMD5(str);
+	var digest = '';
+	for (var i = 0; i < 32; i+= 2) {
+		digest += String.fromCharCode(parseInt(str.slice(i, i + 2), 16));
+	}
+	return Base64.encode(digest);
+}
+
+
+function uuid() {
+	return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+		var r = Math.random()*16|0, v = c == 'x' ? r : (r&0x3|0x8);
+		return v.toString(16);
+	});
+}
+
+
+if (typeof exports !== 'undefined') {
+	exports.aes = Aes.Ctr;
+	exports.sha1 = Sha1.hash;
+	exports.base64 = Base64;
+	exports.utf8 = Utf8;
+	exports.hex_sha1 = hex_sha1;
+	exports.b64_sha1 = b64_sha1;
+	exports.str_sha1 = str_sha1;
+	exports.hex_hmac_sha1 = hex_hmac_sha1;
+	exports.b64_hmac_sha1 = b64_hmac_sha1;
+	exports.str_hmac_sha1 = str_hmac_sha1;
+	exports.md5 = calcMD5;
+	exports.b64_md5_digest = b64_md5_digest;
+	exports.uuid = uuid;
 }
 });
 
@@ -3588,7 +3640,6 @@ var Class = require('class').Class,
 	_ = require('underscore')._;
 
 
-var url = location.protocol + '//' + location.hostname + location.pathname.replace(/^(\/[^\/]+).*/, '$1');
 var key;
 var secret;
 
@@ -3683,9 +3734,7 @@ var s3 = exports.s3 = {
 			url: url,
 			headers: headers,
 			data: data
-		})).then(function(array) {
-			return array[0];
-		}, function(xhr) {
+		})).failed(function(xhr) {
 			var xml = $(xhr.responseText);
 			if (xml.find('code').text() == 'SignatureDoesNotMatch') {
 				console.error('Signature does not match, expected:\n', xml.find('StringToSign').text().replace(/\n/g, '\\n'), '\nactual:\n', stringToSign.replace(/\n/g, '\\n'));
@@ -3745,148 +3794,6 @@ var Bucket = new Class({
 });
 
 
-
-var old = {
-	
-    /**
-        Get contents of a key in a bucket.
-    */
-    get: function(bucket, key, cb, err_cb) {
-        return this.httpClient({
-            method:   'GET',
-            resource: '/' + bucket + '/' + key,
-            load: function(req, obj) {
-                if (cb)     return cb(req, req.responseText);
-            },
-            error: function(req, obj) {
-                if (err_cb) return err_cb(req, obj);
-                if (cb)     return cb(req, req.responseText);
-            }
-        })
-    },
-
-    /**
-        Head the meta of a key in a bucket.
-    */
-    head: function(bucket, key, cb, err_cb) {
-        return this.httpClient({
-            method:   'HEAD',
-            resource: '/' + bucket + '/' + key,
-            load: function(req, obj) {
-                if (cb)     return cb(req, req.responseText);
-            },
-            error: function(req, obj) {
-                if (err_cb) return err_cb(req, obj);
-                if (cb)     return cb(req, req.responseText);
-            }
-        })
-    },
-
-    /**
-        Put data into a key in a bucket.
-    */
-    put: function(bucket, key, content/*, [params], cb, [err_cb]*/) {
-
-        // Process variable arguments for optional params.
-        var idx = 3;
-        var params = {};
-        if (typeof arguments[idx] == 'object')
-            params = arguments[idx++];
-        var cb     = arguments[idx++];
-        var err_cb = arguments[idx++];
-
-        if (!params.content_type) 
-            params.content_type = this.DEFAULT_CONTENT_TYPE;
-        if (!params.acl)
-            params.acl = this.DEFAULT_ACL;
-
-        return this.httpClient({
-            method:       'PUT',
-            resource:     '/' + bucket + '/' + key,
-            content:      content,
-            content_type: params.content_type,
-            meta:         params.meta,
-            acl:          params.acl,
-            load: function(req, obj) {
-                if (cb)     return cb(req);
-            },
-            error: function(req, obj) {
-                if (err_cb) return err_cb(req, obj);
-                if (cb)     return cb(req, obj);
-            }
-        });
-    },
-
-    /**
-        List buckets belonging to the account.
-    */
-    listBuckets: function(cb, err_cb) {
-        return this.httpClient({ 
-            method:'GET', resource:'/', 
-            force_lists: [ 'ListAllMyBucketsResult.Buckets.Bucket' ],
-            load: cb, error:err_cb 
-        });
-    },
-
-    /**
-        Create a new bucket for this account.
-    */
-    createBucket: function(bucket, cb, err_cb) {
-        return this.httpClient({ 
-            method:'PUT', resource:'/'+bucket, load:cb, error:err_cb 
-        });
-    },
-
-    /**
-        Delete an empty bucket.
-    */
-    deleteBucket: function(bucket, cb, err_cb) {
-        return this.httpClient({ 
-            method:'DELETE', resource:'/'+bucket, load:cb, error:err_cb 
-        });
-    },
-
-    /**
-        Given a bucket name and parameters, list keys in the bucket.
-    */
-    listKeys: function(bucket, params, cb, err_cb) {
-        return this.httpClient({
-            method:'GET', resource: '/'+bucket, 
-            force_lists: [ 'ListBucketResult.Contents' ],
-            params:params, load:cb, error:err_cb
-        });
-    },
-
-    /**
-        Delete a single key in a bucket.
-    */
-    deleteKey: function(bucket, key, cb, err_cb) {
-        return this.httpClient({
-            method:'DELETE', resource: '/'+bucket+'/'+key, load:cb, error:err_cb
-        });
-    },
-
-    /**
-        Delete a list of keys in a bucket, with optional callbacks
-        for each deleted key and when list deletion is complete.
-    */
-    deleteKeys: function(bucket, list, one_cb, all_cb) {
-        var _this = this;
-        
-        // If the list is empty, then fire off the callback.
-        if (!list.length && all_cb) return all_cb();
-
-        // Fire off key deletion with a callback to delete the 
-        // next part of list.
-        var key = list.shift();
-        this.deleteKey(bucket, key, function() {
-            if (one_cb) one_cb(key);
-            _this.deleteKeys(bucket, list, one_cb, all_cb);
-        });
-    }
-
-};
-	
 function addQueryParams(url, params) {
 	var query = params instanceof Array ? params : [];
 	
@@ -4196,8 +4103,3517 @@ try {
 
 });
 
-require.addModuleClosure("transport", function(require, exports, module) {
-var S3 = require('s3').S3;
+require.addModuleClosure("jstree", function(require, exports, module) {
+/*
+ * jsTree 1.0-rc1
+ * http://jstree.com/
+ *
+ * Copyright (c) 2010 Ivan Bozhanov (vakata.com)
+ *
+ * Dual licensed under the MIT and GPL licenses (same as jQuery):
+ *   http://www.opensource.org/licenses/mit-license.php
+ *   http://www.gnu.org/licenses/gpl.html
+ *
+ * $Date: 2010-07-01 10:51:11 +0300 (четв, 01 юли 2010) $
+ * $Revision: 191 $
+ */
+
+/*jslint browser: true, onevar: true, undef: true, bitwise: true, strict: true */
+/*global window : false, clearInterval: false, clearTimeout: false, document: false, setInterval: false, setTimeout: false, jQuery: false, navigator: false, XSLTProcessor: false, DOMParser: false, XMLSerializer: false*/
+
+"use strict";
+// Common functions not related to jsTree 
+// decided to move them to a `vakata` "namespace"
+(function ($) {
+	$.vakata = {};
+	// CSS related functions
+	$.vakata.css = {
+		get_css : function(rule_name, delete_flag, sheet) {
+			rule_name = rule_name.toLowerCase();
+			var css_rules = sheet.cssRules || sheet.rules,
+				j = 0;
+			do {
+				if(css_rules.length && j > css_rules.length + 5) { return false; }
+				if(css_rules[j].selectorText && css_rules[j].selectorText.toLowerCase() == rule_name) {
+					if(delete_flag === true) {
+						if(sheet.removeRule) { sheet.removeRule(j); }
+						if(sheet.deleteRule) { sheet.deleteRule(j); }
+						return true;
+					}
+					else { return css_rules[j]; }
+				}
+			}
+			while (css_rules[++j]);
+			return false;
+		},
+		add_css : function(rule_name, sheet) {
+			if($.jstree.css.get_css(rule_name, false, sheet)) { return false; }
+			if(sheet.insertRule) { sheet.insertRule(rule_name + ' { }', 0); } else { sheet.addRule(rule_name, null, 0); }
+			return $.vakata.css.get_css(rule_name);
+		},
+		remove_css : function(rule_name, sheet) { 
+			return $.vakata.css.get_css(rule_name, true, sheet); 
+		},
+		add_sheet : function(opts) {
+			var tmp;
+			if(opts.str) {
+				tmp = document.createElement("style");
+				tmp.setAttribute('type',"text/css");
+				if(tmp.styleSheet) {
+					document.getElementsByTagName("head")[0].appendChild(tmp);
+					tmp.styleSheet.cssText = opts.str;
+				}
+				else {
+					tmp.appendChild(document.createTextNode(opts.str));
+					document.getElementsByTagName("head")[0].appendChild(tmp);
+				}
+				return tmp.sheet || tmp.styleSheet;
+			}
+			if(opts.url) {
+				if(document.createStyleSheet) {
+					try { tmp = document.createStyleSheet(opts.url); } catch (e) { }
+				}
+				else {
+					tmp			= document.createElement('link');
+					tmp.rel		= 'stylesheet';
+					tmp.type	= 'text/css';
+					tmp.media	= "all";
+					tmp.href	= opts.url;
+					document.getElementsByTagName("head")[0].appendChild(tmp);
+					return tmp.styleSheet;
+				}
+			}
+		}
+	};
+})(jQuery);
+
+/* 
+ * jsTree core 1.0
+ */
+(function ($) {
+	// private variables 
+	var instances = [],			// instance array (used by $.jstree.reference/create/focused)
+		focused_instance = -1,	// the index in the instance array of the currently focused instance
+		plugins = {},			// list of included plugins
+		prepared_move = {},		// for the move plugin
+		is_ie6 = false;
+
+	// jQuery plugin wrapper (thanks to jquery UI widget function)
+	$.fn.jstree = function (settings) {
+		var isMethodCall = (typeof settings == 'string'), // is this a method call like $().jstree("open_node")
+			args = Array.prototype.slice.call(arguments, 1), 
+			returnValue = this;
+
+		// extend settings and allow for multiple hashes and metadata
+		if(!isMethodCall && $.meta) { args.push($.metadata.get(this).jstree); }
+		settings = !isMethodCall && args.length ? $.extend.apply(null, [true, settings].concat(args)) : settings;
+		// block calls to "private" methods
+		if(isMethodCall && settings.substring(0, 1) == '_') { return returnValue; }
+
+		// if a method call execute the method on all selected instances
+		if(isMethodCall) {
+			this.each(function() {
+				var instance = instances[$.data(this, "jstree-instance-id")],
+					methodValue = (instance && $.isFunction(instance[settings])) ? instance[settings].apply(instance, args) : instance;
+					if(typeof methodValue !== "undefined" && (settings.indexOf("is_" === 0) || (methodValue !== true && methodValue !== false))) { returnValue = methodValue; return false; }
+			});
+		}
+		else {
+			this.each(function() {
+				var instance_id = $.data(this, "jstree-instance-id"),
+					s = false;
+				// if an instance already exists, destroy it first
+				if(typeof instance_id !== "undefined" && instances[instance_id]) { instances[instance_id].destroy(); }
+				// push a new empty object to the instances array
+				instance_id = parseInt(instances.push({}),10) - 1;
+				// store the jstree instance id to the container element
+				$.data(this, "jstree-instance-id", instance_id);
+				// clean up all plugins
+				if(!settings) { settings = {}; }
+				settings.plugins = $.isArray(settings.plugins) ? settings.plugins : $.jstree.defaults.plugins;
+				if($.inArray("core", settings.plugins) === -1) { settings.plugins.unshift("core"); }
+				
+				// only unique plugins (NOT WORKING)
+				// settings.plugins = settings.plugins.sort().join(",,").replace(/(,|^)([^,]+)(,,\2)+(,|$)/g,"$1$2$4").replace(/,,+/g,",").replace(/,$/,"").split(",");
+
+				// extend defaults with passed data
+				s = $.extend(true, {}, $.jstree.defaults, settings);
+				s.plugins = settings.plugins;
+				$.each(plugins, function (i, val) { if($.inArray(i, s.plugins) === -1) { s[i] = null; delete s[i]; } });
+				// push the new object to the instances array (at the same time set the default classes to the container) and init
+				instances[instance_id] = new $.jstree._instance(instance_id, $(this).addClass("jstree jstree-" + instance_id), s); 
+				// init all activated plugins for this instance
+				$.each(instances[instance_id]._get_settings().plugins, function (i, val) { instances[instance_id].data[val] = {}; });
+				$.each(instances[instance_id]._get_settings().plugins, function (i, val) { if(plugins[val]) { plugins[val].__init.apply(instances[instance_id]); } });
+				// initialize the instance
+				instances[instance_id].init();
+			});
+		}
+		// return the jquery selection (or if it was a method call that returned a value - the returned value)
+		return returnValue;
+	};
+	// object to store exposed functions and objects
+	$.jstree = {
+		defaults : {
+			plugins : []
+		},
+		_focused : function () { return instances[focused_instance] || null; },
+		_reference : function (needle) { 
+			// get by instance id
+			if(instances[needle]) { return instances[needle]; }
+			// get by DOM (if still no luck - return null
+			var o = $(needle); 
+			if(!o.length && typeof needle === "string") { o = $("#" + needle); }
+			if(!o.length) { return null; }
+			return instances[o.closest(".jstree").data("jstree-instance-id")] || null; 
+		},
+		_instance : function (index, container, settings) { 
+			// for plugins to store data in
+			this.data = { core : {} };
+			this.get_settings	= function () { return $.extend(true, {}, settings); };
+			this._get_settings	= function () { return settings; };
+			this.get_index		= function () { return index; };
+			this.get_container	= function () { return container; };
+			this._set_settings	= function (s) { 
+				settings = $.extend(true, {}, settings, s);
+			};
+		},
+		_fn : { },
+		plugin : function (pname, pdata) {
+			pdata = $.extend({}, {
+				__init		: $.noop, 
+				__destroy	: $.noop,
+				_fn			: {},
+				defaults	: false
+			}, pdata);
+			plugins[pname] = pdata;
+
+			$.jstree.defaults[pname] = pdata.defaults;
+			$.each(pdata._fn, function (i, val) {
+				val.plugin		= pname;
+				val.old			= $.jstree._fn[i];
+				$.jstree._fn[i] = function () {
+					var rslt,
+						func = val,
+						args = Array.prototype.slice.call(arguments),
+						evnt = new $.Event("before.jstree"),
+						rlbk = false;
+
+					// Check if function belongs to the included plugins of this instance
+					do {
+						if(func && func.plugin && $.inArray(func.plugin, this._get_settings().plugins) !== -1) { break; }
+						func = func.old;
+					} while(func);
+					if(!func) { return; }
+
+					// a chance to stop execution (or change arguments): 
+					// * just bind to jstree.before
+					// * check the additional data object (func property)
+					// * call event.stopImmediatePropagation()
+					// * return false (or an array of arguments)
+					rslt = this.get_container().triggerHandler(evnt, { "func" : i, "inst" : this, "args" : args });
+					if(rslt === false) { return; }
+					if(typeof rslt !== "undefined") { args = rslt; }
+
+					// context and function to trigger events, then finally call the function
+					if(i.indexOf("_") === 0) {
+						rslt = func.apply(this, args);
+					}
+					else {
+						rslt = func.apply(
+							$.extend({}, this, { 
+								__callback : function (data) { 
+									this.get_container().triggerHandler( i + '.jstree', { "inst" : this, "args" : args, "rslt" : data, "rlbk" : rlbk });
+								},
+								__rollback : function () { 
+									rlbk = this.get_rollback();
+									return rlbk;
+								},
+								__call_old : function (replace_arguments) {
+									return func.old.apply(this, (replace_arguments ? Array.prototype.slice.call(arguments, 1) : args ) );
+								}
+							}), args);
+					}
+
+					// return the result
+					return rslt;
+				};
+				$.jstree._fn[i].old = val.old;
+				$.jstree._fn[i].plugin = pname;
+			});
+		},
+		rollback : function (rb) {
+			if(rb) {
+				if(!$.isArray(rb)) { rb = [ rb ]; }
+				$.each(rb, function (i, val) {
+					instances[val.i].set_rollback(val.h, val.d);
+				});
+			}
+		}
+	};
+	// set the prototype for all instances
+	$.jstree._fn = $.jstree._instance.prototype = {};
+
+	// css functions - used internally
+
+	// load the css when DOM is ready
+	$(function() {
+		// code is copied form jQuery ($.browser is deprecated + there is a bug in IE)
+		var u = navigator.userAgent.toLowerCase(),
+			v = (u.match( /.+?(?:rv|it|ra|ie)[\/: ]([\d.]+)/ ) || [0,'0'])[1],
+			css_string = '' + 
+				'.jstree ul, .jstree li { display:block; margin:0 0 0 0; padding:0 0 0 0; list-style-type:none; } ' + 
+				'.jstree li { display:block; min-height:18px; line-height:18px; white-space:nowrap; margin-left:18px; } ' + 
+				'.jstree-rtl li { margin-left:0; margin-right:18px; } ' + 
+				'.jstree > ul > li { margin-left:0px; } ' + 
+				'.jstree-rtl > ul > li { margin-right:0px; } ' + 
+				'.jstree ins { display:inline-block; text-decoration:none; width:18px; height:18px; margin:0 0 0 0; padding:0; } ' + 
+				'.jstree a { display:inline-block; line-height:16px; height:16px; color:black; white-space:nowrap; text-decoration:none; padding:1px 2px; margin:0; } ' + 
+				'.jstree a:focus { outline: none; } ' + 
+				'.jstree a > ins { height:16px; width:16px; } ' + 
+				'.jstree a > .jstree-icon { margin-right:3px; } ' + 
+				'.jstree-rtl a > .jstree-icon { margin-left:3px; margin-right:0; } ' + 
+				'li.jstree-open > ul { display:block; } ' + 
+				'li.jstree-closed > ul { display:none; } ';
+		// Correct IE 6 (does not support the > CSS selector)
+		if(/msie/.test(u) && parseInt(v, 10) == 6) { 
+			is_ie6 = true;
+			css_string += '' + 
+				'.jstree li { height:18px; margin-left:0; margin-right:0; } ' + 
+				'.jstree li li { margin-left:18px; } ' + 
+				'.jstree-rtl li li { margin-left:0px; margin-right:18px; } ' + 
+				'li.jstree-open ul { display:block; } ' + 
+				'li.jstree-closed ul { display:none !important; } ' + 
+				'.jstree li a { display:inline; border-width:0 !important; padding:0px 2px !important; } ' + 
+				'.jstree li a ins { height:16px; width:16px; margin-right:3px; } ' + 
+				'.jstree-rtl li a ins { margin-right:0px; margin-left:3px; } ';
+		}
+		// Correct IE 7 (shifts anchor nodes onhover)
+		if(/msie/.test(u) && parseInt(v, 10) == 7) { 
+			css_string += '.jstree li a { border-width:0 !important; padding:0px 2px !important; } ';
+		}
+		$.vakata.css.add_sheet({ str : css_string });
+	});
+
+	// core functions (open, close, create, update, delete)
+	$.jstree.plugin("core", {
+		__init : function () {
+			this.data.core.to_open = $.map($.makeArray(this.get_settings().core.initially_open), function (n) { return "#" + n.toString().replace(/^#/,"").replace('\\/','/').replace('/','\\/'); });
+		},
+		defaults : { 
+			html_titles	: false,
+			animation	: 500,
+			initially_open : [],
+			rtl			: false,
+			strings		: {
+				loading		: "Loading ...",
+				new_node	: "New node"
+			}
+		},
+		_fn : { 
+			init	: function () { 
+				this.set_focus(); 
+				if(this._get_settings().core.rtl) {
+					this.get_container().addClass("jstree-rtl").css("direction", "rtl");
+				}
+				this.get_container().html("<ul><li class='jstree-last jstree-leaf'><ins>&#160;</ins><a class='jstree-loading' href='#'><ins class='jstree-icon'>&#160;</ins>" + this._get_settings().core.strings.loading + "</a></li></ul>");
+				this.data.core.li_height = this.get_container().find("ul li.jstree-closed, ul li.jstree-leaf").eq(0).height() || 18;
+
+				this.get_container()
+					.delegate("li > ins", "click.jstree", $.proxy(function (event) {
+							var trgt = $(event.target);
+							if(trgt.is("ins") && event.pageY - trgt.offset().top < this.data.core.li_height) { this.toggle_node(trgt); }
+						}, this))
+					.bind("mousedown.jstree", $.proxy(function () { 
+							this.set_focus(); // This used to be setTimeout(set_focus,0) - why?
+						}, this))
+					.bind("dblclick.jstree", function (event) { 
+						var sel;
+						if(document.selection && document.selection.empty) { document.selection.empty(); }
+						else {
+							if(window.getSelection) {
+								sel = window.getSelection();
+								try { 
+									sel.removeAllRanges();
+									sel.collapse();
+								} catch (err) { }
+							}
+						}
+					});
+				this.__callback();
+				this.load_node(-1, function () { this.loaded(); this.reopen(); });
+			},
+			destroy	: function () { 
+				var i,
+					n = this.get_index(),
+					s = this._get_settings(),
+					_this = this;
+
+				$.each(s.plugins, function (i, val) {
+					try { plugins[val].__destroy.apply(_this); } catch(err) { }
+				});
+				this.__callback();
+				// set focus to another instance if this one is focused
+				if(this.is_focused()) { 
+					for(i in instances) { 
+						if(instances.hasOwnProperty(i) && i != n) { 
+							instances[i].set_focus(); 
+							break; 
+						} 
+					}
+				}
+				// if no other instance found
+				if(n === focused_instance) { focused_instance = -1; }
+				// remove all traces of jstree in the DOM (only the ones set using jstree*) and cleans all events
+				this.get_container()
+					.unbind(".jstree")
+					.undelegate(".jstree")
+					.removeData("jstree-instance-id")
+					.find("[class^='jstree']")
+						.andSelf()
+						.attr("class", function () { return this.className.replace(/jstree[^ ]*|$/ig,''); });
+				// remove the actual data
+				instances[n] = null;
+				delete instances[n];
+			},
+			save_opened : function () {
+				var _this = this;
+				this.data.core.to_open = [];
+				this.get_container().find(".jstree-open").each(function () { 
+					_this.data.core.to_open.push("#" + this.id.toString().replace(/^#/,"").replace('\\/','/').replace('/','\\/')); 
+				});
+				this.__callback(_this.data.core.to_open);
+			},
+			reopen : function (is_callback) {
+				var _this = this,
+					done = true,
+					current = [],
+					remaining = [];
+				if(!is_callback) { this.data.core.reopen = false; this.data.core.refreshing = true; }
+				if(this.data.core.to_open.length) {
+					$.each(this.data.core.to_open, function (i, val) {
+						if(val == "#") { return true; }
+						if($(val).length && $(val).is(".jstree-closed")) { current.push(val); }
+						else { remaining.push(val); }
+					});
+					if(current.length) {
+						this.data.core.to_open = remaining;
+						$.each(current, function (i, val) { 
+							_this.open_node(val, function () { _this.reopen(true); }, true); 
+						});
+						done = false;
+					}
+				}
+				if(done) { 
+					// TODO: find a more elegant approach to syncronizing returning requests
+					if(this.data.core.reopen) { clearTimeout(this.data.core.reopen); }
+					this.data.core.reopen = setTimeout(function () { _this.__callback({}, _this); }, 50);
+					this.data.core.refreshing = false;
+				}
+			},
+			refresh : function (obj) {
+				var _this = this;
+				this.save_opened();
+				if(!obj) { obj = -1; }
+				obj = this._get_node(obj);
+				if(!obj) { obj = -1; }
+				if(obj !== -1) { obj.children("UL").remove(); }
+				this.load_node(obj, function () { _this.__callback({ "obj" : obj}); _this.reopen(); });
+			},
+			// Dummy function to fire after the first load (so that there is a jstree.loaded event)
+			loaded	: function () { 
+				this.__callback(); 
+			},
+			// deal with focus
+			set_focus	: function () { 
+				var f = $.jstree._focused();
+				if(f && f !== this) {
+					f.get_container().removeClass("jstree-focused"); 
+				}
+				if(f !== this) {
+					this.get_container().addClass("jstree-focused"); 
+					focused_instance = this.get_index(); 
+				}
+				this.__callback();
+			},
+			is_focused	: function () { 
+				return focused_instance == this.get_index(); 
+			},
+
+			// traverse
+			_get_node		: function (obj) { 
+				var $obj = $(obj, this.get_container()); 
+				if($obj.is(".jstree") || obj == -1) { return -1; } 
+				$obj = $obj.closest("li", this.get_container()); 
+				return $obj.length ? $obj : false; 
+			},
+			_get_next		: function (obj, strict) {
+				obj = this._get_node(obj);
+				if(obj === -1) { return this.get_container().find("> ul > li:first-child"); }
+				if(!obj.length) { return false; }
+				if(strict) { return (obj.nextAll("li").size() > 0) ? obj.nextAll("li:eq(0)") : false; }
+
+				if(obj.hasClass("jstree-open")) { return obj.find("li:eq(0)"); }
+				else if(obj.nextAll("li").size() > 0) { return obj.nextAll("li:eq(0)"); }
+				else { return obj.parentsUntil(".jstree","li").next("li").eq(0); }
+			},
+			_get_prev		: function (obj, strict) {
+				obj = this._get_node(obj);
+				if(obj === -1) { return this.get_container().find("> ul > li:last-child"); }
+				if(!obj.length) { return false; }
+				if(strict) { return (obj.prevAll("li").length > 0) ? obj.prevAll("li:eq(0)") : false; }
+
+				if(obj.prev("li").length) {
+					obj = obj.prev("li").eq(0);
+					while(obj.hasClass("jstree-open")) { obj = obj.children("ul:eq(0)").children("li:last"); }
+					return obj;
+				}
+				else { var o = obj.parentsUntil(".jstree","li:eq(0)"); return o.length ? o : false; }
+			},
+			_get_parent		: function (obj) {
+				obj = this._get_node(obj);
+				if(obj == -1 || !obj.length) { return false; }
+				var o = obj.parentsUntil(".jstree", "li:eq(0)");
+				return o.length ? o : -1;
+			},
+			_get_children	: function (obj) {
+				obj = this._get_node(obj);
+				if(obj === -1) { return this.get_container().children("ul:eq(0)").children("li"); }
+				if(!obj.length) { return false; }
+				return obj.children("ul:eq(0)").children("li");
+			},
+			get_path		: function (obj, id_mode) {
+				var p = [],
+					_this = this;
+				obj = this._get_node(obj);
+				if(obj === -1 || !obj || !obj.length) { return false; }
+				obj.parentsUntil(".jstree", "li").each(function () {
+					p.push( id_mode ? this.id : _this.get_text(this) );
+				});
+				p.reverse();
+				p.push( id_mode ? obj.attr("id") : this.get_text(obj) );
+				return p;
+			},
+
+			is_open		: function (obj) { obj = this._get_node(obj); return obj && obj !== -1 && obj.hasClass("jstree-open"); },
+			is_closed	: function (obj) { obj = this._get_node(obj); return obj && obj !== -1 && obj.hasClass("jstree-closed"); },
+			is_leaf		: function (obj) { obj = this._get_node(obj); return obj && obj !== -1 && obj.hasClass("jstree-leaf"); },
+			// open/close
+			open_node	: function (obj, callback, skip_animation) {
+				obj = this._get_node(obj);
+				if(!obj.length) { return false; }
+				if(!obj.hasClass("jstree-closed")) { if(callback) { callback.call(); } return false; }
+				var s = skip_animation || is_ie6 ? 0 : this._get_settings().core.animation,
+					t = this;
+				if(!this._is_loaded(obj)) {
+					obj.children("a").addClass("jstree-loading");
+					this.load_node(obj, function () { t.open_node(obj, callback, skip_animation); }, callback);
+				}
+				else {
+					if(s) { obj.children("ul").css("display","none"); }
+					obj.removeClass("jstree-closed").addClass("jstree-open").children("a").removeClass("jstree-loading");
+					if(s) { obj.children("ul").stop(true).slideDown(s, function () { this.style.display = ""; }); }
+					this.__callback({ "obj" : obj });
+					if(callback) { callback.call(); }
+				}
+			},
+			close_node	: function (obj, skip_animation) {
+				obj = this._get_node(obj);
+				var s = skip_animation || is_ie6 ? 0 : this._get_settings().core.animation;
+				if(!obj.length || !obj.hasClass("jstree-open")) { return false; }
+				if(s) { obj.children("ul").attr("style","display:block !important"); }
+				obj.removeClass("jstree-open").addClass("jstree-closed");
+				if(s) { obj.children("ul").stop(true).slideUp(s, function () { this.style.display = ""; }); }
+				this.__callback({ "obj" : obj });
+			},
+			toggle_node	: function (obj) {
+				obj = this._get_node(obj);
+				if(obj.hasClass("jstree-closed")) { return this.open_node(obj); }
+				if(obj.hasClass("jstree-open")) { return this.close_node(obj); }
+			},
+			open_all	: function (obj, original_obj) {
+				obj = obj ? this._get_node(obj) : this.get_container();
+				if(!obj || obj === -1) { obj = this.get_container(); }
+				if(original_obj) { 
+					obj = obj.find("li.jstree-closed");
+				}
+				else {
+					original_obj = obj;
+					if(obj.is(".jstree-closed")) { obj = obj.find("li.jstree-closed").andSelf(); }
+					else { obj = obj.find("li.jstree-closed"); }
+				}
+				var _this = this;
+				obj.each(function () { 
+					var __this = this; 
+					if(!_this._is_loaded(this)) { _this.open_node(this, function() { _this.open_all(__this, original_obj); }, true); }
+					else { _this.open_node(this, false, true); }
+				});
+				// so that callback is fired AFTER all nodes are open
+				if(original_obj.find('li.jstree-closed').length === 0) { this.__callback({ "obj" : original_obj }); }
+			},
+			close_all	: function (obj) {
+				var _this = this;
+				obj = obj ? this._get_node(obj) : this.get_container();
+				if(!obj || obj === -1) { obj = this.get_container(); }
+				obj.find("li.jstree-open").andSelf().each(function () { _this.close_node(this); });
+				this.__callback({ "obj" : obj });
+			},
+			clean_node	: function (obj) {
+				obj = obj && obj != -1 ? $(obj) : this.get_container();
+				obj = obj.is("li") ? obj.find("li").andSelf() : obj.find("li");
+				obj.removeClass("jstree-last")
+					.filter("li:last-child").addClass("jstree-last").end()
+					.filter(":has(li)")
+						.not(".jstree-open").removeClass("jstree-leaf").addClass("jstree-closed");
+				obj.not(".jstree-open, .jstree-closed").addClass("jstree-leaf").children("ul").remove();
+				this.__callback({ "obj" : obj });
+			},
+			// rollback
+			get_rollback : function () { 
+				this.__callback();
+				return { i : this.get_index(), h : this.get_container().children("ul").clone(true), d : this.data }; 
+			},
+			set_rollback : function (html, data) {
+				this.get_container().empty().append(html);
+				this.data = data;
+				this.__callback();
+			},
+			// Dummy functions to be overwritten by any datastore plugin included
+			load_node	: function (obj, s_call, e_call) { this.__callback({ "obj" : obj }); },
+			_is_loaded	: function (obj) { return true; },
+
+			// Basic operations: create
+			create_node	: function (obj, position, js, callback, is_loaded) {
+				obj = this._get_node(obj);
+				position = typeof position === "undefined" ? "last" : position;
+				var d = $("<li>"),
+					s = this._get_settings().core,
+					tmp;
+
+				if(obj !== -1 && !obj.length) { return false; }
+				if(!is_loaded && !this._is_loaded(obj)) { this.load_node(obj, function () { this.create_node(obj, position, js, callback, true); }); return false; }
+
+				this.__rollback();
+
+				if(typeof js === "string") { js = { "data" : js }; }
+				if(!js) { js = {}; }
+				if(js.attr) { d.attr(js.attr); }
+				if(js.state) { d.addClass("jstree-" + js.state); }
+				if(!js.data) { js.data = s.strings.new_node; }
+				if(!$.isArray(js.data)) { tmp = js.data; js.data = []; js.data.push(tmp); }
+				$.each(js.data, function (i, m) {
+					tmp = $("<a>");
+					if($.isFunction(m)) { m = m.call(this, js); }
+					if(typeof m == "string") { tmp.attr('href','#')[ s.html_titles ? "html" : "text" ](m); }
+					else {
+						if(!m.attr) { m.attr = {}; }
+						if(!m.attr.href) { m.attr.href = '#'; }
+						tmp.attr(m.attr)[ s.html_titles ? "html" : "text" ](m.title);
+						if(m.language) { tmp.addClass(m.language); }
+					}
+					tmp.prepend("<ins class='jstree-icon'>&#160;</ins>");
+					if(m.icon) { 
+						if(m.icon.indexOf("/") === -1) { tmp.children("ins").addClass(m.icon); }
+						else { tmp.children("ins").css("background","url('" + m.icon + "') center center no-repeat"); }
+					}
+					d.append(tmp);
+				});
+				d.prepend("<ins class='jstree-icon'>&#160;</ins>");
+				if(obj === -1) {
+					obj = this.get_container();
+					if(position === "before") { position = "first"; }
+					if(position === "after") { position = "last"; }
+				}
+				switch(position) {
+					case "before": obj.before(d); tmp = this._get_parent(obj); break;
+					case "after" : obj.after(d);  tmp = this._get_parent(obj); break;
+					case "inside":
+					case "first" :
+						if(!obj.children("ul").length) { obj.append("<ul>"); }
+						obj.children("ul").prepend(d);
+						tmp = obj;
+						break;
+					case "last":
+						if(!obj.children("ul").length) { obj.append("<ul>"); }
+						obj.children("ul").append(d);
+						tmp = obj;
+						break;
+					default:
+						if(!obj.children("ul").length) { obj.append("<ul>"); }
+						if(!position) { position = 0; }
+						tmp = obj.children("ul").children("li").eq(position);
+						if(tmp.length) { tmp.before(d); }
+						else { obj.children("ul").append(d); }
+						tmp = obj;
+						break;
+				}
+				if(tmp === -1 || tmp.get(0) === this.get_container().get(0)) { tmp = -1; }
+				this.clean_node(tmp);
+				this.__callback({ "obj" : d, "parent" : tmp });
+				if(callback) { callback.call(this, d); }
+				return d;
+			},
+			// Basic operations: rename (deal with text)
+			get_text	: function (obj) {
+				obj = this._get_node(obj);
+				if(!obj.length) { return false; }
+				var s = this._get_settings().core.html_titles;
+				obj = obj.children("a:eq(0)");
+				if(s) {
+					obj = obj.clone();
+					obj.children("INS").remove();
+					return obj.html();
+				}
+				else {
+					obj = obj.contents().filter(function() { return this.nodeType == 3; })[0];
+					return obj.nodeValue;
+				}
+			},
+			set_text	: function (obj, val) {
+				obj = this._get_node(obj);
+				if(!obj.length) { return false; }
+				obj = obj.children("a:eq(0)");
+				if(this._get_settings().core.html_titles) {
+					var tmp = obj.children("INS").clone();
+					obj.html(val).prepend(tmp);
+					this.__callback({ "obj" : obj, "name" : val });
+					return true;
+				}
+				else {
+					obj = obj.contents().filter(function() { return this.nodeType == 3; })[0];
+					this.__callback({ "obj" : obj, "name" : val });
+					return (obj.nodeValue = val);
+				}
+			},
+			rename_node : function (obj, val) {
+				obj = this._get_node(obj);
+				this.__rollback();
+				if(obj && obj.length && this.set_text.apply(this, Array.prototype.slice.call(arguments))) { this.__callback({ "obj" : obj, "name" : val }); }
+			},
+			// Basic operations: deleting nodes
+			delete_node : function (obj) {
+				obj = this._get_node(obj);
+				if(!obj.length) { return false; }
+				this.__rollback();
+				var p = this._get_parent(obj), prev = this._get_prev(obj);
+				obj = obj.remove();
+				if(p !== -1 && p.find("> ul > li").length === 0) {
+					p.removeClass("jstree-open jstree-closed").addClass("jstree-leaf");
+				}
+				this.clean_node(p);
+				this.__callback({ "obj" : obj, "prev" : prev });
+				return obj;
+			},
+			prepare_move : function (o, r, pos, cb, is_cb) {
+				var p = {};
+
+				p.ot = $.jstree._reference(p.o) || this;
+				p.o = p.ot._get_node(o);
+				p.r = r === - 1 ? -1 : this._get_node(r);
+				p.p = (typeof p === "undefined") ? "last" : pos; // TODO: move to a setting
+				if(!is_cb && prepared_move.o && prepared_move.o[0] === p.o[0] && prepared_move.r[0] === p.r[0] && prepared_move.p === p.p) {
+					this.__callback(prepared_move);
+					if(cb) { cb.call(this, prepared_move); }
+					return;
+				}
+				p.ot = $.jstree._reference(p.o) || this;
+				p.rt = r === -1 ? p.ot : $.jstree._reference(p.r) || this;
+				if(p.r === -1) {
+					p.cr = -1;
+					switch(p.p) {
+						case "first":
+						case "before":
+						case "inside":
+							p.cp = 0; 
+							break;
+						case "after":
+						case "last":
+							p.cp = p.rt.get_container().find(" > ul > li").length; 
+							break;
+						default:
+							p.cp = p.p;
+							break;
+					}
+				}
+				else {
+					if(!/^(before|after)$/.test(p.p) && !this._is_loaded(p.r)) {
+						return this.load_node(p.r, function () { this.prepare_move(o, r, pos, cb, true); });
+					}
+					switch(p.p) {
+						case "before":
+							p.cp = p.r.index();
+							p.cr = p.rt._get_parent(p.r);
+							break;
+						case "after":
+							p.cp = p.r.index() + 1;
+							p.cr = p.rt._get_parent(p.r);
+							break;
+						case "inside":
+						case "first":
+							p.cp = 0;
+							p.cr = p.r;
+							break;
+						case "last":
+							p.cp = p.r.find(" > ul > li").length; 
+							p.cr = p.r;
+							break;
+						default: 
+							p.cp = p.p;
+							p.cr = p.r;
+							break;
+					}
+				}
+				p.np = p.cr == -1 ? p.rt.get_container() : p.cr;
+				p.op = p.ot._get_parent(p.o);
+				p.or = p.np.find(" > ul > li:nth-child(" + (p.cp + 1) + ")");
+
+				prepared_move = p;
+				this.__callback(prepared_move);
+				if(cb) { cb.call(this, prepared_move); }
+			},
+			check_move : function () {
+				var obj = prepared_move, ret = true;
+				if(obj.or[0] === obj.o[0]) { return false; }
+				obj.o.each(function () { 
+					if(obj.r.parentsUntil(".jstree").andSelf().filter("li").index(this) !== -1) { ret = false; return false; }
+				});
+				return ret;
+			},
+			move_node : function (obj, ref, position, is_copy, is_prepared, skip_check) {
+				if(!is_prepared) { 
+					return this.prepare_move(obj, ref, position, function (p) {
+						this.move_node(p, false, false, is_copy, true, skip_check);
+					});
+				}
+				if(!skip_check && !this.check_move()) { return false; }
+
+				this.__rollback();
+				var o = false;
+				if(is_copy) {
+					o = obj.o.clone();
+					o.find("*[id]").andSelf().each(function () {
+						if(this.id) { this.id = "copy_" + this.id; }
+					});
+				}
+				else { o = obj.o; }
+
+				if(obj.or.length) { obj.or.before(o); }
+				else { 
+					if(!obj.np.children("ul").length) { $("<ul>").appendTo(obj.np); }
+					obj.np.children("ul:eq(0)").append(o); 
+				}
+
+				try { 
+					obj.ot.clean_node(obj.op);
+					obj.rt.clean_node(obj.np);
+					if(!obj.op.find("> ul > li").length) {
+						obj.op.removeClass("jstree-open jstree-closed").addClass("jstree-leaf").children("ul").remove();
+					}
+				} catch (e) { }
+
+				if(is_copy) { 
+					prepared_move.cy = true;
+					prepared_move.oc = o; 
+				}
+				this.__callback(prepared_move);
+				return prepared_move;
+			},
+			_get_move : function () { return prepared_move; }
+		}
+	});
+})(jQuery);
+//*/
+
+/* 
+ * jsTree ui plugin 1.0
+ * This plugins handles selecting/deselecting/hovering/dehovering nodes
+ */
+(function ($) {
+	$.jstree.plugin("ui", {
+		__init : function () { 
+			this.data.ui.selected = $(); 
+			this.data.ui.last_selected = false; 
+			this.data.ui.hovered = null;
+			this.data.ui.to_select = this.get_settings().ui.initially_select;
+
+			this.get_container()
+				.delegate("a", "click.jstree", $.proxy(function (event) {
+						event.preventDefault();
+						this.select_node(event.currentTarget, true, event);
+					}, this))
+				.delegate("a", "mouseenter.jstree", $.proxy(function (event) {
+						this.hover_node(event.target);
+					}, this))
+				.delegate("a", "mouseleave.jstree", $.proxy(function (event) {
+						this.dehover_node(event.target);
+					}, this))
+				.bind("reopen.jstree", $.proxy(function () { 
+						this.reselect();
+					}, this))
+				.bind("get_rollback.jstree", $.proxy(function () { 
+						this.dehover_node();
+						this.save_selected();
+					}, this))
+				.bind("set_rollback.jstree", $.proxy(function () { 
+						this.reselect();
+					}, this))
+				.bind("close_node.jstree", $.proxy(function (event, data) { 
+						var s = this._get_settings().ui,
+							obj = this._get_node(data.rslt.obj),
+							clk = (obj && obj.length) ? obj.children("ul").find(".jstree-clicked") : $(),
+							_this = this;
+						if(s.selected_parent_close === false || !clk.length) { return; }
+						clk.each(function () { 
+							_this.deselect_node(this);
+							if(s.selected_parent_close === "select_parent") { _this.select_node(obj); }
+						});
+					}, this))
+				.bind("delete_node.jstree", $.proxy(function (event, data) { 
+						var s = this._get_settings().ui.select_prev_on_delete,
+							obj = this._get_node(data.rslt.obj),
+							clk = (obj && obj.length) ? obj.find(".jstree-clicked") : [],
+							_this = this;
+						clk.each(function () { _this.deselect_node(this); });
+						if(s && clk.length) { this.select_node(data.rslt.prev); }
+					}, this))
+				.bind("move_node.jstree", $.proxy(function (event, data) { 
+						if(data.rslt.cy) { 
+							data.rslt.oc.find(".jstree-clicked").removeClass("jstree-clicked");
+						}
+					}, this));
+		},
+		defaults : {
+			select_limit : -1, // 0, 1, 2 ... or -1 for unlimited
+			select_multiple_modifier : "ctrl", // on, or ctrl, shift, alt
+			selected_parent_close : "select_parent", // false, "deselect", "select_parent"
+			select_prev_on_delete : true,
+			disable_selecting_children : false,
+			initially_select : []
+		},
+		_fn : { 
+			_get_node : function (obj, allow_multiple) {
+				if(typeof obj === "undefined" || obj === null) { return allow_multiple ? this.data.ui.selected : this.data.ui.last_selected; }
+				var $obj = $(obj, this.get_container()); 
+				if($obj.is(".jstree") || obj == -1) { return -1; } 
+				$obj = $obj.closest("li", this.get_container()); 
+				return $obj.length ? $obj : false; 
+			},
+			save_selected : function () {
+				var _this = this;
+				this.data.ui.to_select = [];
+				this.data.ui.selected.each(function () { _this.data.ui.to_select.push("#" + this.id.toString().replace(/^#/,"").replace('\\/','/').replace('/','\\/')); });
+				this.__callback(this.data.ui.to_select);
+			},
+			reselect : function () {
+				var _this = this,
+					s = this.data.ui.to_select;
+				s = $.map($.makeArray(s), function (n) { return "#" + n.toString().replace(/^#/,"").replace('\\/','/').replace('/','\\/'); });
+				this.deselect_all();
+				$.each(s, function (i, val) { if(val && val !== "#") { _this.select_node(val); } });
+				this.__callback();
+			},
+			refresh : function (obj) {
+				this.save_selected();
+				return this.__call_old();
+			},
+			hover_node : function (obj) {
+				obj = this._get_node(obj);
+				if(!obj.length) { return false; }
+				//if(this.data.ui.hovered && obj.get(0) === this.data.ui.hovered.get(0)) { return; }
+				if(!obj.hasClass("jstree-hovered")) { this.dehover_node(); }
+				this.data.ui.hovered = obj.children("a").addClass("jstree-hovered").parent();
+				this.__callback({ "obj" : obj });
+			},
+			dehover_node : function () {
+				var obj = this.data.ui.hovered, p;
+				if(!obj || !obj.length) { return false; }
+				p = obj.children("a").removeClass("jstree-hovered").parent();
+				if(this.data.ui.hovered[0] === p[0]) { this.data.ui.hovered = null; }
+				this.__callback({ "obj" : obj });
+			},
+			select_node : function (obj, check, e) {
+				obj = this._get_node(obj);
+				if(obj == -1 || !obj || !obj.length) { return false; }
+				var s = this._get_settings().ui,
+					is_multiple = (s.select_multiple_modifier == "on" || (s.select_multiple_modifier !== false && e && e[s.select_multiple_modifier + "Key"])),
+					is_selected = this.is_selected(obj),
+					proceed = true;
+				if(check) {
+					if(s.disable_selecting_children && is_multiple && obj.parents("li", this.get_container()).children(".jstree-clicked").length) {
+						return false;
+					}
+					proceed = false;
+					switch(!0) {
+						case (is_selected && !is_multiple): 
+							this.deselect_all();
+							is_selected = false;
+							proceed = true;
+							break;
+						case (!is_selected && !is_multiple): 
+							if(s.select_limit == -1 || s.select_limit > 0) {
+								this.deselect_all();
+								proceed = true;
+							}
+							break;
+						case (is_selected && is_multiple): 
+							this.deselect_node(obj);
+							break;
+						case (!is_selected && is_multiple): 
+							if(s.select_limit == -1 || this.data.ui.selected.length + 1 <= s.select_limit) { 
+								proceed = true;
+							}
+							break;
+					}
+				}
+				if(proceed && !is_selected) {
+					obj.children("a").addClass("jstree-clicked");
+					this.data.ui.selected = this.data.ui.selected.add(obj);
+					this.data.ui.last_selected = obj;
+					this.__callback({ "obj" : obj });
+				}
+			},
+			deselect_node : function (obj) {
+				obj = this._get_node(obj);
+				if(!obj.length) { return false; }
+				if(this.is_selected(obj)) {
+					obj.children("a").removeClass("jstree-clicked");
+					this.data.ui.selected = this.data.ui.selected.not(obj);
+					if(this.data.ui.last_selected.get(0) === obj.get(0)) { this.data.ui.last_selected = this.data.ui.selected.eq(0); }
+					this.__callback({ "obj" : obj });
+				}
+			},
+			toggle_select : function (obj) {
+				obj = this._get_node(obj);
+				if(!obj.length) { return false; }
+				if(this.is_selected(obj)) { this.deselect_node(obj); }
+				else { this.select_node(obj); }
+			},
+			is_selected : function (obj) { return this.data.ui.selected.index(this._get_node(obj)) >= 0; },
+			get_selected : function (context) { 
+				return context ? $(context).find(".jstree-clicked").parent() : this.data.ui.selected; 
+			},
+			deselect_all : function (context) {
+				if(context) { $(context).find(".jstree-clicked").removeClass("jstree-clicked"); } 
+				else { this.get_container().find(".jstree-clicked").removeClass("jstree-clicked"); }
+				this.data.ui.selected = $([]);
+				this.data.ui.last_selected = false;
+				this.__callback();
+			}
+		}
+	});
+	// include the selection plugin by default
+	$.jstree.defaults.plugins.push("ui");
+})(jQuery);
+//*/
+
+/* 
+ * jsTree CRRM plugin 1.0
+ * Handles creating/renaming/removing/moving nodes by user interaction.
+ */
+(function ($) {
+	$.jstree.plugin("crrm", { 
+		__init : function () {
+			this.get_container()
+				.bind("move_node.jstree", $.proxy(function (e, data) {
+					if(this._get_settings().crrm.move.open_onmove) {
+						var t = this;
+						data.rslt.np.parentsUntil(".jstree").andSelf().filter(".jstree-closed").each(function () {
+							t.open_node(this, false, true);
+						});
+					}
+				}, this));
+		},
+		defaults : {
+			input_width_limit : 200,
+			move : {
+				always_copy			: false, // false, true or "multitree"
+				open_onmove			: true,
+				default_position	: "last",
+				check_move			: function (m) { return true; }
+			}
+		},
+		_fn : {
+			_show_input : function (obj, callback) {
+				obj = this._get_node(obj);
+				var rtl = this._get_settings().core.rtl,
+					w = this._get_settings().crrm.input_width_limit,
+					w1 = obj.children("ins").width(),
+					w2 = obj.find("> a:visible > ins").width() * obj.find("> a:visible > ins").length,
+					t = this.get_text(obj),
+					h1 = $("<div>", { css : { "position" : "absolute", "top" : "-200px", "left" : (rtl ? "0px" : "-1000px"), "visibility" : "hidden" } }).appendTo("body"),
+					h2 = obj.css("position","relative").append(
+					$("<input>", { 
+						"value" : t,
+						// "size" : t.length,
+						"css" : {
+							"padding" : "0",
+							"border" : "1px solid silver",
+							"position" : "absolute",
+							"left"  : (rtl ? "auto" : (w1 + w2 + 4) + "px"),
+							"right" : (rtl ? (w1 + w2 + 4) + "px" : "auto"),
+							"top" : "0px",
+							"height" : (this.data.core.li_height - 2) + "px",
+							"lineHeight" : (this.data.core.li_height - 2) + "px",
+							"width" : "150px" // will be set a bit further down
+						},
+						"blur" : $.proxy(function () {
+							var i = obj.children("input"),
+								v = i.val();
+							if(v === "") { v = t; }
+							i.remove(); // rollback purposes
+							this.set_text(obj,t); // rollback purposes
+							this.rename_node(obj, v);
+							callback.call(this, obj, v, t);
+							obj.css("position","");
+						}, this),
+						"keyup" : function (event) {
+							var key = event.keyCode || event.which;
+							if(key == 27) { this.value = t; this.blur(); return; }
+							else if(key == 13) { this.blur(); return; }
+							else {
+								h2.width(Math.min(h1.text("pW" + this.value).width(),w));
+							}
+						}
+					})
+				).children("input"); 
+				this.set_text(obj, "");
+				h1.css({
+						fontFamily		: h2.css('fontFamily')		|| '',
+						fontSize		: h2.css('fontSize')		|| '',
+						fontWeight		: h2.css('fontWeight')		|| '',
+						fontStyle		: h2.css('fontStyle')		|| '',
+						fontStretch		: h2.css('fontStretch')		|| '',
+						fontVariant		: h2.css('fontVariant')		|| '',
+						letterSpacing	: h2.css('letterSpacing')	|| '',
+						wordSpacing		: h2.css('wordSpacing')		|| ''
+				});
+				h2.width(Math.min(h1.text("pW" + h2[0].value).width(),w))[0].select();
+			},
+			rename : function (obj) {
+				obj = this._get_node(obj);
+				this.__rollback();
+				var f = this.__callback;
+				this._show_input(obj, function (obj, new_name, old_name) { 
+					f.call(this, { "obj" : obj, "new_name" : new_name, "old_name" : old_name });
+				});
+			},
+			create : function (obj, position, js, callback, skip_rename) {
+				var t, _this = this;
+				obj = this._get_node(obj);
+				if(!obj) { obj = -1; }
+				this.__rollback();
+				t = this.create_node(obj, position, js, function (t) {
+					var p = this._get_parent(t),
+						pos = $(t).index();
+					if(callback) { callback.call(this, t); }
+					if(p.length && p.hasClass("jstree-closed")) { this.open_node(p, false, true); }
+					if(!skip_rename) { 
+						this._show_input(t, function (obj, new_name, old_name) { 
+							_this.__callback({ "obj" : obj, "name" : new_name, "parent" : p, "position" : pos });
+						});
+					}
+					else { _this.__callback({ "obj" : t, "name" : this.get_text(t), "parent" : p, "position" : pos }); }
+				});
+				return t;
+			},
+			remove : function (obj) {
+				obj = this._get_node(obj, true);
+				this.__rollback();
+				this.delete_node(obj);
+				this.__callback({ "obj" : obj });
+			},
+			check_move : function () {
+				if(!this.__call_old()) { return false; }
+				var s = this._get_settings().crrm.move;
+				if(!s.check_move.call(this, this._get_move())) { return false; }
+				return true;
+			},
+			move_node : function (obj, ref, position, is_copy, is_prepared, skip_check) {
+				var s = this._get_settings().crrm.move;
+				if(!is_prepared) { 
+					if(!position) { position = s.default_position; }
+					if(position === "inside" && !s.default_position.match(/^(before|after)$/)) { position = s.default_position; }
+					return this.__call_old(true, obj, ref, position, is_copy, false, skip_check);
+				}
+				// if the move is already prepared
+				if(s.always_copy === true || (s.always_copy === "multitree" && obj.rt.get_index() !== obj.ot.get_index() )) {
+					is_copy = true;
+				}
+				this.__call_old(true, obj, ref, position, is_copy, true, skip_check);
+			},
+
+			cut : function (obj) {
+				obj = this._get_node(obj);
+				this.data.crrm.cp_nodes = false;
+				this.data.crrm.ct_nodes = false;
+				if(!obj || !obj.length) { return false; }
+				this.data.crrm.ct_nodes = obj;
+			},
+			copy : function (obj) {
+				obj = this._get_node(obj);
+				this.data.crrm.cp_nodes = false;
+				this.data.crrm.ct_nodes = false;
+				if(!obj || !obj.length) { return false; }
+				this.data.crrm.cp_nodes = obj;
+			},
+			paste : function (obj) { 
+				obj = this._get_node(obj);
+				if(!obj || !obj.length) { return false; }
+				if(!this.data.crrm.ct_nodes && !this.data.crrm.cp_nodes) { return false; }
+				if(this.data.crrm.ct_nodes) { this.move_node(this.data.crrm.ct_nodes, obj); }
+				if(this.data.crrm.cp_nodes) { this.move_node(this.data.crrm.cp_nodes, obj, false, true); }
+				this.data.crrm.cp_nodes = false;
+				this.data.crrm.ct_nodes = false;
+			}
+		}
+	});
+	// include the crr plugin by default
+	$.jstree.defaults.plugins.push("crrm");
+})(jQuery);
+
+/* 
+ * jsTree themes plugin 1.0
+ * Handles loading and setting themes, as well as detecting path to themes, etc.
+ */
+(function ($) {
+	var themes_loaded = [];
+	// this variable stores the path to the themes folder - if left as false - it will be autodetected
+	$.jstree._themes = false;
+	$.jstree.plugin("themes", {
+		__init : function () { 
+			this.get_container()
+				.bind("init.jstree", $.proxy(function () {
+						var s = this._get_settings().themes;
+						this.data.themes.dots = s.dots; 
+						this.data.themes.icons = s.icons; 
+						//alert(s.dots);
+						this.set_theme(s.theme, s.url);
+					}, this))
+				.bind("loaded.jstree", $.proxy(function () {
+						// bound here too, as simple HTML tree's won't honor dots & icons otherwise
+						if(!this.data.themes.dots) { this.hide_dots(); }
+						else { this.show_dots(); }
+						if(!this.data.themes.icons) { this.hide_icons(); }
+						else { this.show_icons(); }
+					}, this));
+		},
+		defaults : { 
+			theme : "default", 
+			url : false,
+			dots : true,
+			icons : true
+		},
+		_fn : {
+			set_theme : function (theme_name, theme_url) {
+				if(!theme_name) { return false; }
+				if(!theme_url) { theme_url = $.jstree._themes + theme_name + '/style.css'; }
+				if($.inArray(theme_url, themes_loaded) == -1) {
+					$.vakata.css.add_sheet({ "url" : theme_url, "rel" : "jstree" });
+					themes_loaded.push(theme_url);
+				}
+				if(this.data.themes.theme != theme_name) {
+					this.get_container().removeClass('jstree-' + this.data.themes.theme);
+					this.data.themes.theme = theme_name;
+				}
+				this.get_container().addClass('jstree-' + theme_name);
+				if(!this.data.themes.dots) { this.hide_dots(); }
+				else { this.show_dots(); }
+				if(!this.data.themes.icons) { this.hide_icons(); }
+				else { this.show_icons(); }
+				this.__callback();
+			},
+			get_theme	: function () { return this.data.themes.theme; },
+
+			show_dots	: function () { this.data.themes.dots = true; this.get_container().children("ul").removeClass("jstree-no-dots"); },
+			hide_dots	: function () { this.data.themes.dots = false; this.get_container().children("ul").addClass("jstree-no-dots"); },
+			toggle_dots	: function () { if(this.data.themes.dots) { this.hide_dots(); } else { this.show_dots(); } },
+
+			show_icons	: function () { this.data.themes.icons = true; this.get_container().children("ul").removeClass("jstree-no-icons"); },
+			hide_icons	: function () { this.data.themes.icons = false; this.get_container().children("ul").addClass("jstree-no-icons"); },
+			toggle_icons: function () { if(this.data.themes.icons) { this.hide_icons(); } else { this.show_icons(); } }
+		}
+	});
+	// autodetect themes path
+	$(function () {
+		if($.jstree._themes === false) {
+			$("script").each(function () { 
+				if(this.src.toString().match(/jquery\.jstree[^\/]*?\.js(\?.*)?$/)) { 
+					$.jstree._themes = this.src.toString().replace(/jquery\.jstree[^\/]*?\.js(\?.*)?$/, "") + 'themes/'; 
+					return false; 
+				}
+			});
+		}
+		if($.jstree._themes === false) { $.jstree._themes = "themes/"; }
+	});
+	// include the themes plugin by default
+	$.jstree.defaults.plugins.push("themes");
+})(jQuery);
+//*/
+
+/*
+ * jsTree hotkeys plugin 1.0
+ * Enables keyboard navigation for all tree instances
+ * Depends on the jstree ui & jquery hotkeys plugins
+ */
+(function ($) {
+	var bound = [];
+	function exec(i, event) {
+		var f = $.jstree._focused(), tmp;
+		if(f && f.data && f.data.hotkeys && f.data.hotkeys.enabled) { 
+			tmp = f._get_settings().hotkeys[i];
+			if(tmp) { return tmp.call(f, event); }
+		}
+	}
+	$.jstree.plugin("hotkeys", {
+		__init : function () {
+			if(typeof $.hotkeys === "undefined") { throw "jsTree hotkeys: jQuery hotkeys plugin not included."; }
+			if(!this.data.ui) { throw "jsTree hotkeys: jsTree UI plugin not included."; }
+			$.each(this._get_settings().hotkeys, function (i, val) {
+				if($.inArray(i, bound) == -1) {
+					$(document).bind("keydown", i, function (event) { return exec(i, event); });
+					bound.push(i);
+				}
+			});
+			this.enable_hotkeys();
+		},
+		defaults : {
+			"up" : function () { 
+				var o = this.data.ui.hovered || this.data.ui.last_selected || -1;
+				this.hover_node(this._get_prev(o));
+				return false; 
+			},
+			"down" : function () { 
+				var o = this.data.ui.hovered || this.data.ui.last_selected || -1;
+				this.hover_node(this._get_next(o));
+				return false;
+			},
+			"left" : function () { 
+				var o = this.data.ui.hovered || this.data.ui.last_selected;
+				if(o) {
+					if(o.hasClass("jstree-open")) { this.close_node(o); }
+					else { this.hover_node(this._get_prev(o)); }
+				}
+				return false;
+			},
+			"right" : function () { 
+				var o = this.data.ui.hovered || this.data.ui.last_selected;
+				if(o && o.length) {
+					if(o.hasClass("jstree-closed")) { this.open_node(o); }
+					else { this.hover_node(this._get_next(o)); }
+				}
+				return false;
+			},
+			"space" : function () { 
+				if(this.data.ui.hovered) { this.data.ui.hovered.children("a:eq(0)").click(); } 
+				return false; 
+			},
+			"ctrl+space" : function (event) { 
+				event.type = "click";
+				if(this.data.ui.hovered) { this.data.ui.hovered.children("a:eq(0)").trigger(event); } 
+				return false; 
+			},
+			"f2" : function () { this.rename(this.data.ui.hovered || this.data.ui.last_selected); },
+			"del" : function () { this.remove(this.data.ui.hovered || this._get_node(null)); }
+		},
+		_fn : {
+			enable_hotkeys : function () {
+				this.data.hotkeys.enabled = true;
+			},
+			disable_hotkeys : function () {
+				this.data.hotkeys.enabled = false;
+			}
+		}
+	});
+})(jQuery);
+//*/
+
+/* 
+ * jsTree JSON 1.0
+ * The JSON data store. Datastores are build by overriding the `load_node` and `_is_loaded` functions.
+ */
+(function ($) {
+	$.jstree.plugin("json_data", {
+		defaults : { 
+			data : false,
+			ajax : false,
+			correct_state : true,
+			progressive_render : false
+		},
+		_fn : {
+			load_node : function (obj, s_call, e_call) { var _this = this; this.load_node_json(obj, function () { _this.__callback({ "obj" : obj }); s_call.call(this); }, e_call); },
+			_is_loaded : function (obj) { 
+				var s = this._get_settings().json_data, d;
+				obj = this._get_node(obj); 
+				if(obj && obj !== -1 && s.progressive_render && !obj.is(".jstree-open, .jstree-leaf") && obj.children("ul").children("li").length === 0 && obj.data("jstree-children")) {
+					d = this._parse_json(obj.data("jstree-children"));
+					if(d) {
+						obj.append(d);
+						$.removeData(obj, "jstree-children");
+					}
+					this.clean_node(obj);
+					return true;
+				}
+				return obj == -1 || !obj || !s.ajax || obj.is(".jstree-open, .jstree-leaf") || obj.children("ul").children("li").size() > 0;
+			},
+			load_node_json : function (obj, s_call, e_call) {
+				var s = this.get_settings().json_data, d,
+					error_func = function () {},
+					success_func = function () {};
+				obj = this._get_node(obj);
+				if(obj && obj !== -1) {
+					if(obj.data("jstree-is-loading")) { return; }
+					else { obj.data("jstree-is-loading",true); }
+				}
+				switch(!0) {
+					case (!s.data && !s.ajax): throw "Neither data nor ajax settings supplied.";
+					case (!!s.data && !s.ajax) || (!!s.data && !!s.ajax && (!obj || obj === -1)):
+						if(!obj || obj == -1) {
+							d = this._parse_json(s.data);
+							if(d) {
+								this.get_container().children("ul").empty().append(d.children());
+								this.clean_node();
+							}
+							else { 
+								if(s.correct_state) { this.get_container().children("ul").empty(); }
+							}
+						}
+						if(s_call) { s_call.call(this); }
+						break;
+					case (!s.data && !!s.ajax) || (!!s.data && !!s.ajax && obj && obj !== -1):
+						error_func = function (x, t, e) {
+							var ef = this.get_settings().json_data.ajax.error; 
+							if(ef) { ef.call(this, x, t, e); }
+							if(obj != -1 && obj.length) {
+								obj.children(".jstree-loading").removeClass("jstree-loading");
+								obj.data("jstree-is-loading",false);
+								if(t === "success" && s.correct_state) { obj.removeClass("jstree-open jstree-closed").addClass("jstree-leaf"); }
+							}
+							else {
+								if(t === "success" && s.correct_state) { this.get_container().children("ul").empty(); }
+							}
+							if(e_call) { e_call.call(this); }
+						};
+						success_func = function (d, t, x) {
+							var sf = this.get_settings().json_data.ajax.success; 
+							if(sf) { d = sf.call(this,d,t,x) || d; }
+							if(d === "" || (!$.isArray(d) && !$.isPlainObject(d))) {
+								return error_func.call(this, x, t, "");
+							}
+							d = this._parse_json(d);
+							if(d) {
+								if(obj === -1 || !obj) { this.get_container().children("ul").empty().append(d.children()); }
+								else { obj.append(d).children(".jstree-loading").removeClass("jstree-loading"); obj.data("jstree-is-loading",false); }
+								this.clean_node(obj);
+								if(s_call) { s_call.call(this); }
+							}
+							else {
+								if(obj === -1 || !obj) {
+									if(s.correct_state) { 
+										this.get_container().children("ul").empty(); 
+										if(s_call) { s_call.call(this); }
+									}
+								}
+								else {
+									obj.children(".jstree-loading").removeClass("jstree-loading");
+									obj.data("jstree-is-loading",false);
+									if(s.correct_state) { 
+										obj.removeClass("jstree-open jstree-closed").addClass("jstree-leaf"); 
+										if(s_call) { s_call.call(this); } 
+									}
+								}
+							}
+						};
+						s.ajax.context = this;
+						s.ajax.error = error_func;
+						s.ajax.success = success_func;
+						if(!s.ajax.dataType) { s.ajax.dataType = "json"; }
+						if($.isFunction(s.ajax.url)) { s.ajax.url = s.ajax.url.call(this, obj); }
+						if($.isFunction(s.ajax.data)) { s.ajax.data = s.ajax.data.call(this, obj); }
+						$.ajax(s.ajax);
+						break;
+				}
+			},
+			_parse_json : function (js, is_callback) {
+				var d = false, 
+					p = this._get_settings(),
+					s = p.json_data,
+					t = p.core.html_titles,
+					tmp, i, j, ul1, ul2;
+
+				if(!js) { return d; }
+				if($.isFunction(js)) { 
+					js = js.call(this);
+				}
+				if($.isArray(js)) {
+					d = $();
+					if(!js.length) { return false; }
+					for(i = 0, j = js.length; i < j; i++) {
+						tmp = this._parse_json(js[i], true);
+						if(tmp.length) { d = d.add(tmp); }
+					}
+				}
+				else {
+					if(typeof js == "string") { js = { data : js }; }
+					if(!js.data && js.data !== "") { return d; }
+					d = $("<li>");
+					if(js.attr) { d.attr(js.attr); }
+					if(js.metadata) { d.data("jstree", js.metadata); }
+					if(js.state) { d.addClass("jstree-" + js.state); }
+					if(!$.isArray(js.data)) { tmp = js.data; js.data = []; js.data.push(tmp); }
+					$.each(js.data, function (i, m) {
+						tmp = $("<a>");
+						if($.isFunction(m)) { m = m.call(this, js); }
+						if(typeof m == "string") { tmp.attr('href','#')[ t ? "html" : "text" ](m); }
+						else {
+							if(!m.attr) { m.attr = {}; }
+							if(!m.attr.href) { m.attr.href = '#'; }
+							tmp.attr(m.attr)[ t ? "html" : "text" ](m.title);
+							if(m.language) { tmp.addClass(m.language); }
+						}
+						tmp.prepend("<ins class='jstree-icon'>&#160;</ins>");
+						if(!m.icon && js.icon) { m.icon = js.icon; }
+						if(m.icon) { 
+							if(m.icon.indexOf("/") === -1) { tmp.children("ins").addClass(m.icon); }
+							else { tmp.children("ins").css("background","url('" + m.icon + "') center center no-repeat"); }
+						}
+						d.append(tmp);
+					});
+					d.prepend("<ins class='jstree-icon'>&#160;</ins>");
+					if(js.children) { 
+						if(s.progressive_render && js.state !== "open") {
+							d.addClass("jstree-closed").data("jstree-children", js.children);
+						}
+						else {
+							if($.isFunction(js.children)) {
+								js.children = js.children.call(this, js);
+							}
+							if($.isArray(js.children) && js.children.length) {
+								tmp = this._parse_json(js.children, true);
+								if(tmp.length) {
+									ul2 = $("<ul>");
+									ul2.append(tmp);
+									d.append(ul2);
+								}
+							}
+						}
+					}
+				}
+				if(!is_callback) {
+					ul1 = $("<ul>");
+					ul1.append(d);
+					d = ul1;
+				}
+				return d;
+			},
+			get_json : function (obj, li_attr, a_attr, is_callback) {
+				var result = [], 
+					s = this._get_settings(), 
+					_this = this,
+					tmp1, tmp2, li, a, t, lang;
+				obj = this._get_node(obj);
+				if(!obj || obj === -1) { obj = this.get_container().find("> ul > li"); }
+				li_attr = $.isArray(li_attr) ? li_attr : [ "id", "class" ];
+				if(!is_callback && this.data.types) { li_attr.push(s.types.type_attr); }
+				a_attr = $.isArray(a_attr) ? a_attr : [ ];
+
+				obj.each(function () {
+					li = $(this);
+					tmp1 = { data : [] };
+					if(li_attr.length) { tmp1.attr = { }; }
+					$.each(li_attr, function (i, v) { 
+						tmp2 = li.attr(v); 
+						if(tmp2 && tmp2.length && tmp2.replace(/jstree[^ ]*|$/ig,'').length) {
+							tmp1.attr[v] = tmp2.replace(/jstree[^ ]*|$/ig,''); 
+						}
+					});
+					if(li.hasClass("jstree-open")) { tmp1.state = "open"; }
+					if(li.hasClass("jstree-closed")) { tmp1.state = "closed"; }
+					a = li.children("a");
+					a.each(function () {
+						t = $(this);
+						if(
+							a_attr.length || 
+							$.inArray("languages", s.plugins) !== -1 || 
+							t.children("ins").get(0).style.backgroundImage.length || 
+							(t.children("ins").get(0).className && t.children("ins").get(0).className.replace(/jstree[^ ]*|$/ig,'').length)
+						) { 
+							lang = false;
+							if($.inArray("languages", s.plugins) !== -1 && $.isArray(s.languages) && s.languages.length) {
+								$.each(s.languages, function (l, lv) {
+									if(t.hasClass(lv)) {
+										lang = lv;
+										return false;
+									}
+								});
+							}
+							tmp2 = { attr : { }, title : _this.get_text(t, lang) }; 
+							$.each(a_attr, function (k, z) {
+								tmp1.attr[z] = (t.attr(z) || "").replace(/jstree[^ ]*|$/ig,'');
+							});
+							$.each(s.languages, function (k, z) {
+								if(t.hasClass(z)) { tmp2.language = z; return true; }
+							});
+							if(t.children("ins").get(0).className.replace(/jstree[^ ]*|$/ig,'').replace(/^\s+$/ig,"").length) {
+								tmp2.icon = t.children("ins").get(0).className.replace(/jstree[^ ]*|$/ig,'').replace(/^\s+$/ig,"");
+							}
+							if(t.children("ins").get(0).style.backgroundImage.length) {
+								tmp2.icon = t.children("ins").get(0).style.backgroundImage.replace("url(","").replace(")","");
+							}
+						}
+						else {
+							tmp2 = _this.get_text(t);
+						}
+						if(a.length > 1) { tmp1.data.push(tmp2); }
+						else { tmp1.data = tmp2; }
+					});
+					li = li.find("> ul > li");
+					if(li.length) { tmp1.children = _this.get_json(li, li_attr, a_attr, true); }
+					result.push(tmp1);
+				});
+				return result;
+			}
+		}
+	});
+})(jQuery);
+//*/
+
+/* 
+ * jsTree languages plugin 1.0
+ * Adds support for multiple language versions in one tree
+ * This basically allows for many titles coexisting in one node, but only one of them being visible at any given time
+ * This is useful for maintaining the same structure in many languages (hence the name of the plugin)
+ */
+(function ($) {
+	$.jstree.plugin("languages", {
+		__init : function () { this._load_css();  },
+		defaults : [],
+		_fn : {
+			set_lang : function (i) { 
+				var langs = this._get_settings().languages,
+					st = false,
+					selector = ".jstree-" + this.get_index() + ' a';
+				if(!$.isArray(langs) || langs.length === 0) { return false; }
+				if($.inArray(i,langs) == -1) {
+					if(!!langs[i]) { i = langs[i]; }
+					else { return false; }
+				}
+				if(i == this.data.languages.current_language) { return true; }
+				st = $.vakata.css.get_css(selector + "." + this.data.languages.current_language, false, this.data.languages.language_css);
+				if(st !== false) { st.style.display = "none"; }
+				st = $.vakata.css.get_css(selector + "." + i, false, this.data.languages.language_css);
+				if(st !== false) { st.style.display = ""; }
+				this.data.languages.current_language = i;
+				this.__callback(i);
+				return true;
+			},
+			get_lang : function () {
+				return this.data.languages.current_language;
+			},
+			get_text : function (obj, lang) {
+				obj = this._get_node(obj) || this.data.ui.last_selected;
+				if(!obj.size()) { return false; }
+				var langs = this._get_settings().languages,
+					s = this._get_settings().core.html_titles;
+				if($.isArray(langs) && langs.length) {
+					lang = (lang && $.inArray(lang,langs) != -1) ? lang : this.data.languages.current_language;
+					obj = obj.children("a." + lang);
+				}
+				else { obj = obj.children("a:eq(0)"); }
+				if(s) {
+					obj = obj.clone();
+					obj.children("INS").remove();
+					return obj.html();
+				}
+				else {
+					obj = obj.contents().filter(function() { return this.nodeType == 3; })[0];
+					return obj.nodeValue;
+				}
+			},
+			set_text : function (obj, val, lang) {
+				obj = this._get_node(obj) || this.data.ui.last_selected;
+				if(!obj.size()) { return false; }
+				var langs = this._get_settings().languages,
+					s = this._get_settings().core.html_titles,
+					tmp;
+				if($.isArray(langs) && langs.length) {
+					lang = (lang && $.inArray(lang,langs) != -1) ? lang : this.data.languages.current_language;
+					obj = obj.children("a." + lang);
+				}
+				else { obj = obj.children("a:eq(0)"); }
+				if(s) {
+					tmp = obj.children("INS").clone();
+					obj.html(val).prepend(tmp);
+					this.__callback({ "obj" : obj, "name" : val, "lang" : lang });
+					return true;
+				}
+				else {
+					obj = obj.contents().filter(function() { return this.nodeType == 3; })[0];
+					this.__callback({ "obj" : obj, "name" : val, "lang" : lang });
+					return (obj.nodeValue = val);
+				}
+			},
+			_load_css : function () {
+				var langs = this._get_settings().languages,
+					str = "/* languages css */",
+					selector = ".jstree-" + this.get_index() + ' a',
+					ln;
+				if($.isArray(langs) && langs.length) {
+					this.data.languages.current_language = langs[0];
+					for(ln = 0; ln < langs.length; ln++) {
+						str += selector + "." + langs[ln] + " {";
+						if(langs[ln] != this.data.languages.current_language) { str += " display:none; "; }
+						str += " } ";
+					}
+					this.data.languages.language_css = $.vakata.css.add_sheet({ 'str' : str });
+				}
+			},
+			create_node : function (obj, position, js, callback) {
+				var t = this.__call_old(true, obj, position, js, function (t) {
+					var langs = this._get_settings().languages,
+						a = t.children("a"),
+						ln;
+					if($.isArray(langs) && langs.length) {
+						for(ln = 0; ln < langs.length; ln++) {
+							if(!a.is("." + langs[ln])) {
+								t.append(a.eq(0).clone().removeClass(langs.join(" ")).addClass(langs[ln]));
+							}
+						}
+						a.not("." + langs.join(", .")).remove();
+					}
+					if(callback) { callback.call(this, t); }
+				});
+				return t;
+			}
+		}
+	});
+})(jQuery);
+//*/
+
+/*
+ * jsTree cookies plugin 1.0
+ * Stores the currently opened/selected nodes in a cookie and then restores them
+ * Depends on the jquery.cookie plugin
+ */
+(function ($) {
+	$.jstree.plugin("cookies", {
+		__init : function () {
+			if(typeof $.cookie === "undefined") { throw "jsTree cookie: jQuery cookie plugin not included."; }
+
+			var s = this._get_settings().cookies,
+				tmp;
+			if(!!s.save_opened) {
+				tmp = $.cookie(s.save_opened);
+				if(tmp && tmp.length) { this.data.core.to_open = tmp.split(","); }
+			}
+			if(!!s.save_selected) {
+				tmp = $.cookie(s.save_selected);
+				if(tmp && tmp.length && this.data.ui) { this.data.ui.to_select = tmp.split(","); }
+			}
+			this.get_container()
+				.one( ( this.data.ui ? "reselect" : "reopen" ) + ".jstree", $.proxy(function () {
+					this.get_container()
+						.bind("open_node.jstree close_node.jstree select_node.jstree deselect_node.jstree", $.proxy(function (e) { 
+								if(this._get_settings().cookies.auto_save) { this.save_cookie((e.handleObj.namespace + e.handleObj.type).replace("jstree","")); }
+							}, this));
+				}, this));
+		},
+		defaults : {
+			save_opened		: "jstree_open",
+			save_selected	: "jstree_select",
+			auto_save		: true,
+			cookie_options	: {}
+		},
+		_fn : {
+			save_cookie : function (c) {
+				if(this.data.core.refreshing) { return; }
+				var s = this._get_settings().cookies;
+				if(!c) { // if called manually and not by event
+					if(s.save_opened) {
+						this.save_opened();
+						$.cookie(s.save_opened, this.data.core.to_open.join(","), s.cookie_options);
+					}
+					if(s.save_selected && this.data.ui) {
+						this.save_selected();
+						$.cookie(s.save_selected, this.data.ui.to_select.join(","), s.cookie_options);
+					}
+					return;
+				}
+				switch(c) {
+					case "open_node":
+					case "close_node":
+						if(!!s.save_opened) { 
+							this.save_opened(); 
+							$.cookie(s.save_opened, this.data.core.to_open.join(","), s.cookie_options); 
+						}
+						break;
+					case "select_node":
+					case "deselect_node":
+						if(!!s.save_selected && this.data.ui) { 
+							this.save_selected(); 
+							$.cookie(s.save_selected, this.data.ui.to_select.join(","), s.cookie_options); 
+						}
+						break;
+				}
+			}
+		}
+	});
+	// include cookies by default
+	$.jstree.defaults.plugins.push("cookies");
+})(jQuery);
+//*/
+
+/*
+ * jsTree sort plugin 1.0
+ * Sorts items alphabetically (or using any other function)
+ */
+(function ($) {
+	$.jstree.plugin("sort", {
+		__init : function () {
+			this.get_container()
+				.bind("load_node.jstree", $.proxy(function (e, data) {
+						var obj = this._get_node(data.rslt.obj);
+						obj = obj === -1 ? this.get_container().children("ul") : obj.children("ul");
+						this.sort(obj);
+					}, this))
+				.bind("rename_node.jstree", $.proxy(function (e, data) {
+						this.sort(data.rslt.obj.parent());
+					}, this))
+				.bind("move_node.jstree", $.proxy(function (e, data) {
+						var m = data.rslt.np == -1 ? this.get_container() : data.rslt.np;
+						this.sort(m.children("ul"));
+					}, this));
+		},
+		defaults : function (a, b) { return this.get_text(a) > this.get_text(b) ? 1 : -1; },
+		_fn : {
+			sort : function (obj) {
+				var s = this._get_settings().sort,
+					t = this;
+				obj.append($.makeArray(obj.children("li")).sort($.proxy(s, t)));
+				obj.find("> li > ul").each(function() { t.sort($(this)); });
+				this.clean_node(obj);
+			}
+		}
+	});
+})(jQuery);
+//*/
+
+/*
+ * jsTree DND plugin 1.0
+ * Drag and drop plugin for moving/copying nodes
+ */
+(function ($) {
+	var o = false,
+		r = false,
+		m = false,
+		sli = false,
+		sti = false,
+		dir1 = false,
+		dir2 = false;
+	$.vakata.dnd = {
+		is_down : false,
+		is_drag : false,
+		helper : false,
+		scroll_spd : 10,
+		init_x : 0,
+		init_y : 0,
+		threshold : 5,
+		user_data : {},
+
+		drag_start : function (e, data, html) { 
+			if($.vakata.dnd.is_drag) { $.vakata.drag_stop({}); }
+			try {
+				e.currentTarget.unselectable = "on";
+				e.currentTarget.onselectstart = function() { return false; };
+				if(e.currentTarget.style) { e.currentTarget.style.MozUserSelect = "none"; }
+			} catch(err) { }
+			$.vakata.dnd.init_x = e.pageX;
+			$.vakata.dnd.init_y = e.pageY;
+			$.vakata.dnd.user_data = data;
+			$.vakata.dnd.is_down = true;
+			$.vakata.dnd.helper = $("<div id='vakata-dragged'>").html(html).css("opacity", "0.75");
+			$(document).bind("mousemove", $.vakata.dnd.drag);
+			$(document).bind("mouseup", $.vakata.dnd.drag_stop);
+			return false;
+		},
+		drag : function (e) { 
+			if(!$.vakata.dnd.is_down) { return; }
+			if(!$.vakata.dnd.is_drag) {
+				if(Math.abs(e.pageX - $.vakata.dnd.init_x) > 5 || Math.abs(e.pageY - $.vakata.dnd.init_y) > 5) { 
+					$.vakata.dnd.helper.appendTo("body");
+					$.vakata.dnd.is_drag = true;
+					$(document).triggerHandler("drag_start.vakata", { "event" : e, "data" : $.vakata.dnd.user_data });
+				}
+				else { return; }
+			}
+
+			// maybe use a scrolling parent element instead of document?
+			if(e.type === "mousemove") { // thought of adding scroll in order to move the helper, but mouse poisition is n/a
+				var d = $(document), t = d.scrollTop(), l = d.scrollLeft();
+				if(e.pageY - t < 20) { 
+					if(sti && dir1 === "down") { clearInterval(sti); sti = false; }
+					if(!sti) { dir1 = "up"; sti = setInterval(function () { $(document).scrollTop($(document).scrollTop() - $.vakata.dnd.scroll_spd); }, 150); }
+				}
+				else { 
+					if(sti && dir1 === "up") { clearInterval(sti); sti = false; }
+				}
+				if($(window).height() - (e.pageY - t) < 20) {
+					if(sti && dir1 === "up") { clearInterval(sti); sti = false; }
+					if(!sti) { dir1 = "down"; sti = setInterval(function () { $(document).scrollTop($(document).scrollTop() + $.vakata.dnd.scroll_spd); }, 150); }
+				}
+				else { 
+					if(sti && dir1 === "down") { clearInterval(sti); sti = false; }
+				}
+
+				if(e.pageX - l < 20) {
+					if(sli && dir2 === "right") { clearInterval(sli); sli = false; }
+					if(!sli) { dir2 = "left"; sli = setInterval(function () { $(document).scrollLeft($(document).scrollLeft() - $.vakata.dnd.scroll_spd); }, 150); }
+				}
+				else { 
+					if(sli && dir2 === "left") { clearInterval(sli); sli = false; }
+				}
+				if($(window).width() - (e.pageX - l) < 20) {
+					if(sli && dir2 === "left") { clearInterval(sli); sli = false; }
+					if(!sli) { dir2 = "right"; sli = setInterval(function () { $(document).scrollLeft($(document).scrollLeft() + $.vakata.dnd.scroll_spd); }, 150); }
+				}
+				else { 
+					if(sli && dir2 === "right") { clearInterval(sli); sli = false; }
+				}
+			}
+
+			$.vakata.dnd.helper.css({ left : (e.pageX + 5) + "px", top : (e.pageY + 10) + "px" });
+			$(document).triggerHandler("drag.vakata", { "event" : e, "data" : $.vakata.dnd.user_data });
+		},
+		drag_stop : function (e) {
+			$(document).unbind("mousemove", $.vakata.dnd.drag);
+			$(document).unbind("mouseup", $.vakata.dnd.drag_stop);
+			$(document).triggerHandler("drag_stop.vakata", { "event" : e, "data" : $.vakata.dnd.user_data });
+			$.vakata.dnd.helper.remove();
+			$.vakata.dnd.init_x = 0;
+			$.vakata.dnd.init_y = 0;
+			$.vakata.dnd.user_data = {};
+			$.vakata.dnd.is_down = false;
+			$.vakata.dnd.is_drag = false;
+		}
+	};
+	$(function() {
+		var css_string = '#vakata-dragged { display:block; margin:0 0 0 0; padding:4px 4px 4px 24px; position:absolute; top:-2000px; line-height:16px; z-index:10000; } ';
+		$.vakata.css.add_sheet({ str : css_string });
+	});
+
+	$.jstree.plugin("dnd", {
+		__init : function () {
+			this.data.dnd = {
+				active : false,
+				after : false,
+				inside : false,
+				before : false,
+				off : false,
+				prepared : false,
+				w : 0,
+				to1 : false,
+				to2 : false,
+				cof : false,
+				cw : false,
+				ch : false,
+				i1 : false,
+				i2 : false
+			};
+			this.get_container()
+				.bind("mouseenter.jstree", $.proxy(function () {
+						if($.vakata.dnd.is_drag && $.vakata.dnd.user_data.jstree && this.data.themes) {
+							m.attr("class", "jstree-" + this.data.themes.theme); 
+							$.vakata.dnd.helper.attr("class", "jstree-dnd-helper jstree-" + this.data.themes.theme);
+						}
+					}, this))
+				.bind("mouseleave.jstree", $.proxy(function () {
+						if($.vakata.dnd.is_drag && $.vakata.dnd.user_data.jstree) {
+							if(this.data.dnd.i1) { clearInterval(this.data.dnd.i1); }
+							if(this.data.dnd.i2) { clearInterval(this.data.dnd.i2); }
+						}
+					}, this))
+				.bind("mousemove.jstree", $.proxy(function (e) {
+						if($.vakata.dnd.is_drag && $.vakata.dnd.user_data.jstree) {
+							var cnt = this.get_container()[0];
+
+							// Horizontal scroll
+							if(e.pageX + 24 > this.data.dnd.cof.left + this.data.dnd.cw) {
+								if(this.data.dnd.i1) { clearInterval(this.data.dnd.i1); }
+								this.data.dnd.i1 = setInterval($.proxy(function () { this.scrollLeft += $.vakata.dnd.scroll_spd; }, cnt), 100);
+							}
+							else if(e.pageX - 24 < this.data.dnd.cof.left) {
+								if(this.data.dnd.i1) { clearInterval(this.data.dnd.i1); }
+								this.data.dnd.i1 = setInterval($.proxy(function () { this.scrollLeft -= $.vakata.dnd.scroll_spd; }, cnt), 100);
+							}
+							else {
+								if(this.data.dnd.i1) { clearInterval(this.data.dnd.i1); }
+							}
+
+							// Vertical scroll
+							if(e.pageY + 24 > this.data.dnd.cof.top + this.data.dnd.ch) {
+								if(this.data.dnd.i2) { clearInterval(this.data.dnd.i2); }
+								this.data.dnd.i2 = setInterval($.proxy(function () { this.scrollTop += $.vakata.dnd.scroll_spd; }, cnt), 100);
+							}
+							else if(e.pageY - 24 < this.data.dnd.cof.top) {
+								if(this.data.dnd.i2) { clearInterval(this.data.dnd.i2); }
+								this.data.dnd.i2 = setInterval($.proxy(function () { this.scrollTop -= $.vakata.dnd.scroll_spd; }, cnt), 100);
+							}
+							else {
+								if(this.data.dnd.i2) { clearInterval(this.data.dnd.i2); }
+							}
+
+						}
+					}, this))
+				.delegate("a", "mousedown.jstree", $.proxy(function (e) { 
+						if(e.which === 1) {
+							this.start_drag(e.currentTarget, e);
+							return false;
+						}
+					}, this))
+				.delegate("a", "mouseenter.jstree", $.proxy(function (e) { 
+						if($.vakata.dnd.is_drag && $.vakata.dnd.user_data.jstree) {
+							this.dnd_enter(e.currentTarget);
+						}
+					}, this))
+				.delegate("a", "mousemove.jstree", $.proxy(function (e) { 
+						if($.vakata.dnd.is_drag && $.vakata.dnd.user_data.jstree) {
+							if(typeof this.data.dnd.off.top === "undefined") { this.data.dnd.off = $(e.target).offset(); }
+							this.data.dnd.w = (e.pageY - (this.data.dnd.off.top || 0)) % this.data.core.li_height;
+							if(this.data.dnd.w < 0) { this.data.dnd.w += this.data.core.li_height; }
+							this.dnd_show();
+						}
+					}, this))
+				.delegate("a", "mouseleave.jstree", $.proxy(function (e) { 
+						if($.vakata.dnd.is_drag && $.vakata.dnd.user_data.jstree) {
+							this.data.dnd.after		= false;
+							this.data.dnd.before	= false;
+							this.data.dnd.inside	= false;
+							$.vakata.dnd.helper.children("ins").attr("class","jstree-invalid");
+							m.hide();
+							if(r && r[0] === e.target.parentNode) {
+								if(this.data.dnd.to1) {
+									clearTimeout(this.data.dnd.to1);
+									this.data.dnd.to1 = false;
+								}
+								if(this.data.dnd.to2) {
+									clearTimeout(this.data.dnd.to2);
+									this.data.dnd.to2 = false;
+								}
+							}
+						}
+					}, this))
+				.delegate("a", "mouseup.jstree", $.proxy(function (e) { 
+						if($.vakata.dnd.is_drag && $.vakata.dnd.user_data.jstree) {
+							this.dnd_finish(e);
+						}
+					}, this));
+
+			$(document)
+				.bind("drag_stop.vakata", $.proxy(function () {
+						this.data.dnd.after		= false;
+						this.data.dnd.before	= false;
+						this.data.dnd.inside	= false;
+						this.data.dnd.off		= false;
+						this.data.dnd.prepared	= false;
+						this.data.dnd.w			= false;
+						this.data.dnd.to1		= false;
+						this.data.dnd.to2		= false;
+						this.data.dnd.active	= false;
+						this.data.dnd.foreign	= false;
+						if(m) { m.css({ "top" : "-2000px" }); }
+					}, this))
+				.bind("drag_start.vakata", $.proxy(function (e, data) {
+						if(data.data.jstree) { 
+							var et = $(data.event.target);
+							if(et.closest(".jstree").hasClass("jstree-" + this.get_index())) {
+								this.dnd_enter(et);
+							}
+						}
+					}, this));
+
+			var s = this._get_settings().dnd;
+			if(s.drag_target) {
+				$(document)
+					.delegate(s.drag_target, "mousedown.jstree", $.proxy(function (e) {
+						o = e.target;
+						$.vakata.dnd.drag_start(e, { jstree : true, obj : e.target }, "<ins class='jstree-icon'></ins>" + $(e.target).text() );
+						if(this.data.themes) { 
+							m.attr("class", "jstree-" + this.data.themes.theme); 
+							$.vakata.dnd.helper.attr("class", "jstree-dnd-helper jstree-" + this.data.themes.theme); 
+						}
+						$.vakata.dnd.helper.children("ins").attr("class","jstree-invalid");
+						var cnt = this.get_container();
+						this.data.dnd.cof = cnt.offset();
+						this.data.dnd.cw = parseInt(cnt.width(),10);
+						this.data.dnd.ch = parseInt(cnt.height(),10);
+						this.data.dnd.foreign = true;
+						return false;
+					}, this));
+			}
+			if(s.drop_target) {
+				$(document)
+					.delegate(s.drop_target, "mouseenter.jstree", $.proxy(function (e) {
+							if(this.data.dnd.active && this._get_settings().dnd.drop_check.call(this, { "o" : o, "r" : $(e.target) })) {
+								$.vakata.dnd.helper.children("ins").attr("class","jstree-ok");
+							}
+						}, this))
+					.delegate(s.drop_target, "mouseleave.jstree", $.proxy(function (e) {
+							if(this.data.dnd.active) {
+								$.vakata.dnd.helper.children("ins").attr("class","jstree-invalid");
+							}
+						}, this))
+					.delegate(s.drop_target, "mouseup.jstree", $.proxy(function (e) {
+							if(this.data.dnd.active && $.vakata.dnd.helper.children("ins").hasClass("jstree-ok")) {
+								this._get_settings().dnd.drop_finish.call(this, { "o" : o, "r" : $(e.target) });
+							}
+						}, this));
+			}
+		},
+		defaults : {
+			copy_modifier	: "ctrl",
+			check_timeout	: 200,
+			open_timeout	: 500,
+			drop_target		: ".jstree-drop",
+			drop_check		: function (data) { return true; },
+			drop_finish		: $.noop,
+			drag_target		: ".jstree-draggable",
+			drag_finish		: $.noop,
+			drag_check		: function (data) { return { after : false, before : false, inside : true }; }
+		},
+		_fn : {
+			dnd_prepare : function () {
+				if(!r || !r.length) { return; }
+				this.data.dnd.off = r.offset();
+				if(this._get_settings().core.rtl) {
+					this.data.dnd.off.right = this.data.dnd.off.left + r.width();
+				}
+				if(this.data.dnd.foreign) {
+					var a = this._get_settings().dnd.drag_check.call(this, { "o" : o, "r" : r });
+					this.data.dnd.after = a.after;
+					this.data.dnd.before = a.before;
+					this.data.dnd.inside = a.inside;
+					this.data.dnd.prepared = true;
+					return this.dnd_show();
+				}
+				this.prepare_move(o, r, "before");
+				this.data.dnd.before = this.check_move();
+				this.prepare_move(o, r, "after");
+				this.data.dnd.after = this.check_move();
+				if(this._is_loaded(r)) {
+					this.prepare_move(o, r, "inside");
+					this.data.dnd.inside = this.check_move();
+				}
+				else {
+					this.data.dnd.inside = false;
+				}
+				this.data.dnd.prepared = true;
+				return this.dnd_show();
+			},
+			dnd_show : function () {
+				if(!this.data.dnd.prepared) { return; }
+				var o = ["before","inside","after"],
+					r = false,
+					rtl = this._get_settings().core.rtl,
+					pos;
+				if(this.data.dnd.w < this.data.core.li_height/3) { o = ["before","inside","after"]; }
+				else if(this.data.dnd.w <= this.data.core.li_height*2/3) {
+					o = this.data.dnd.w < this.data.core.li_height/2 ? ["inside","before","after"] : ["inside","after","before"];
+				}
+				else { o = ["after","inside","before"]; }
+				$.each(o, $.proxy(function (i, val) { 
+					if(this.data.dnd[val]) {
+						$.vakata.dnd.helper.children("ins").attr("class","jstree-ok");
+						r = val;
+						return false;
+					}
+				}, this));
+				if(r === false) { $.vakata.dnd.helper.children("ins").attr("class","jstree-invalid"); }
+				
+				pos = rtl ? (this.data.dnd.off.right - 18) : (this.data.dnd.off.left + 10);
+				switch(r) {
+					case "before":
+						m.css({ "left" : pos + "px", "top" : (this.data.dnd.off.top - 6) + "px" }).show();
+						break;
+					case "after":
+						m.css({ "left" : pos + "px", "top" : (this.data.dnd.off.top + this.data.core.li_height - 7) + "px" }).show();
+						break;
+					case "inside":
+						m.css({ "left" : pos + ( rtl ? -4 : 4) + "px", "top" : (this.data.dnd.off.top + this.data.core.li_height/2 - 5) + "px" }).show();
+						break;
+					default:
+						m.hide();
+						break;
+				}
+				return r;
+			},
+			dnd_open : function () {
+				this.data.dnd.to2 = false;
+				this.open_node(r, $.proxy(this.dnd_prepare,this), true);
+			},
+			dnd_finish : function (e) {
+				if(this.data.dnd.foreign) {
+					if(this.data.dnd.after || this.data.dnd.before || this.data.dnd.inside) {
+						this._get_settings().dnd.drag_finish.call(this, { "o" : o, "r" : r });
+					}
+				}
+				else {
+					this.dnd_prepare();
+					this.move_node(o, r, this.dnd_show(), e[this._get_settings().dnd.copy_modifier + "Key"]);
+				}
+				o = false;
+				r = false;
+				m.hide();
+			},
+			dnd_enter : function (obj) {
+				var s = this._get_settings().dnd;
+				this.data.dnd.prepared = false;
+				r = this._get_node(obj);
+				if(s.check_timeout) { 
+					// do the calculations after a minimal timeout (users tend to drag quickly to the desired location)
+					if(this.data.dnd.to1) { clearTimeout(this.data.dnd.to1); }
+					this.data.dnd.to1 = setTimeout($.proxy(this.dnd_prepare, this), s.check_timeout); 
+				}
+				else { 
+					this.dnd_prepare(); 
+				}
+				if(s.open_timeout) { 
+					if(this.data.dnd.to2) { clearTimeout(this.data.dnd.to2); }
+					if(r && r.length && r.hasClass("jstree-closed")) { 
+						// if the node is closed - open it, then recalculate
+						this.data.dnd.to2 = setTimeout($.proxy(this.dnd_open, this), s.open_timeout);
+					}
+				}
+				else {
+					if(r && r.length && r.hasClass("jstree-closed")) { 
+						this.dnd_open();
+					}
+				}
+			},
+			start_drag : function (obj, e) {
+				o = this._get_node(obj);
+				if(this.data.ui && this.is_selected(o)) { o = this._get_node(null, true); }
+				$.vakata.dnd.drag_start(e, { jstree : true, obj : o }, "<ins class='jstree-icon'></ins>" + (o.length > 1 ? "Multiple selection" : this.get_text(o)) );
+				if(this.data.themes) { 
+					m.attr("class", "jstree-" + this.data.themes.theme); 
+					$.vakata.dnd.helper.attr("class", "jstree-dnd-helper jstree-" + this.data.themes.theme); 
+				}
+				var cnt = this.get_container();
+				this.data.dnd.cof = cnt.children("ul").offset();
+				this.data.dnd.cw = parseInt(cnt.width(),10);
+				this.data.dnd.ch = parseInt(cnt.height(),10);
+				this.data.dnd.active = true;
+			}
+		}
+	});
+	$(function() {
+		var css_string = '' + 
+			'#vakata-dragged ins { display:block; text-decoration:none; width:16px; height:16px; margin:0 0 0 0; padding:0; position:absolute; top:4px; left:4px; } ' + 
+			'#vakata-dragged .jstree-ok { background:green; } ' + 
+			'#vakata-dragged .jstree-invalid { background:red; } ' + 
+			'#jstree-marker { padding:0; margin:0; line-height:12px; font-size:1px; overflow:hidden; height:12px; width:8px; position:absolute; top:-30px; z-index:10000; background-repeat:no-repeat; display:none; background-color:silver; } ';
+		$.vakata.css.add_sheet({ str : css_string });
+		m = $("<div>").attr({ id : "jstree-marker" }).hide().appendTo("body");
+		$(document).bind("drag_start.vakata", function (e, data) {
+			if(data.data.jstree) { 
+				m.show(); 
+			}
+		});
+		$(document).bind("drag_stop.vakata", function (e, data) {
+			if(data.data.jstree) { m.hide(); }
+		});
+	});
+})(jQuery);
+//*/
+
+/*
+ * jsTree checkbox plugin 1.0
+ * Inserts checkboxes in front of every node
+ * Depends on the ui plugin
+ * DOES NOT WORK NICELY WITH MULTITREE DRAG'N'DROP
+ */
+(function ($) {
+	$.jstree.plugin("checkbox", {
+		__init : function () {
+			this.select_node = this.deselect_node = this.deselect_all = $.noop;
+			this.get_selected = this.get_checked;
+
+			this.get_container()
+				.bind("open_node.jstree create_node.jstree clean_node.jstree", $.proxy(function (e, data) { 
+						this._prepare_checkboxes(data.rslt.obj);
+					}, this))
+				.bind("loaded.jstree", $.proxy(function (e) {
+						this._prepare_checkboxes();
+					}, this))
+				.delegate("a", "click.jstree", $.proxy(function (e) {
+						if(this._get_node(e.target).hasClass("jstree-checked")) { this.uncheck_node(e.target); }
+						else { this.check_node(e.target); }
+						if(this.data.ui) { this.save_selected(); }
+						if(this.data.cookies) { this.save_cookie("select_node"); }
+						e.preventDefault();
+					}, this));
+		},
+		__destroy : function () {
+			this.get_container().find(".jstree-checkbox").remove();
+		},
+		_fn : {
+			_prepare_checkboxes : function (obj) {
+				obj = !obj || obj == -1 ? this.get_container() : this._get_node(obj);
+				var c, _this = this, t;
+				obj.each(function () {
+					t = $(this);
+					c = t.is("li") && t.hasClass("jstree-checked") ? "jstree-checked" : "jstree-unchecked";
+					t.find("a").not(":has(.jstree-checkbox)").prepend("<ins class='jstree-checkbox'>&#160;</ins>").parent().not(".jstree-checked, .jstree-unchecked").addClass(c);
+				});
+				if(obj.is("li")) { this._repair_state(obj); }
+				else { obj.find("> ul > li").each(function () { _this._repair_state(this); }); }
+			},
+			change_state : function (obj, state) {
+				obj = this._get_node(obj);
+				state = (state === false || state === true) ? state : obj.hasClass("jstree-checked");
+				if(state) { obj.find("li").andSelf().removeClass("jstree-checked jstree-undetermined").addClass("jstree-unchecked"); }
+				else { 
+					obj.find("li").andSelf().removeClass("jstree-unchecked jstree-undetermined").addClass("jstree-checked"); 
+					if(this.data.ui) { this.data.ui.last_selected = obj; }
+					this.data.checkbox.last_selected = obj;
+				}
+				obj.parentsUntil(".jstree", "li").each(function () {
+					var $this = $(this);
+					if(state) {
+						if($this.children("ul").children(".jstree-checked, .jstree-undetermined").length) {
+							$this.parentsUntil(".jstree", "li").andSelf().removeClass("jstree-checked jstree-unchecked").addClass("jstree-undetermined");
+							return false;
+						}
+						else {
+							$this.removeClass("jstree-checked jstree-undetermined").addClass("jstree-unchecked");
+						}
+					}
+					else {
+						if($this.children("ul").children(".jstree-unchecked, .jstree-undetermined").length) {
+							$this.parentsUntil(".jstree", "li").andSelf().removeClass("jstree-checked jstree-unchecked").addClass("jstree-undetermined");
+							return false;
+						}
+						else {
+							$this.removeClass("jstree-unchecked jstree-undetermined").addClass("jstree-checked");
+						}
+					}
+				});
+				if(this.data.ui) { this.data.ui.selected = this.get_checked(); }
+				this.__callback(obj);
+			},
+			check_node : function (obj) {
+				this.change_state(obj, false);
+			},
+			uncheck_node : function (obj) {
+				this.change_state(obj, true);
+			},
+			check_all : function () {
+				var _this = this;
+				this.get_container().children("ul").children("li").each(function () {
+					_this.check_node(this, false);
+				});
+			},
+			uncheck_all : function () {
+				var _this = this;
+				this.get_container().children("ul").children("li").each(function () {
+					_this.change_state(this, true);
+				});
+			},
+
+			is_checked : function(obj) {
+				obj = this._get_node(obj);
+				return obj.length ? obj.is(".jstree-checked") : false;
+			},
+			get_checked : function (obj) {
+				obj = !obj || obj === -1 ? this.get_container() : this._get_node(obj);
+				return obj.find("> ul > .jstree-checked, .jstree-undetermined > ul > .jstree-checked");
+			},
+			get_unchecked : function (obj) { 
+				obj = !obj || obj === -1 ? this.get_container() : this._get_node(obj);
+				return obj.find("> ul > .jstree-unchecked, .jstree-undetermined > ul > .jstree-unchecked");
+			},
+
+			show_checkboxes : function () { this.get_container().children("ul").removeClass("jstree-no-checkboxes"); },
+			hide_checkboxes : function () { this.get_container().children("ul").addClass("jstree-no-checkboxes"); },
+
+			_repair_state : function (obj) {
+				obj = this._get_node(obj);
+				if(!obj.length) { return; }
+				var a = obj.find("> ul > .jstree-checked").length,
+					b = obj.find("> ul > .jstree-undetermined").length,
+					c = obj.find("> ul > li").length;
+
+				if(c === 0) { if(obj.hasClass("jstree-undetermined")) { this.check_node(obj); } }
+				else if(a === 0 && b === 0) { this.uncheck_node(obj); }
+				else if(a === c) { this.check_node(obj); }
+				else { 
+					obj.parentsUntil(".jstree","li").removeClass("jstree-checked jstree-unchecked").addClass("jstree-undetermined");
+				}
+			},
+			reselect : function () {
+				if(this.data.ui) { 
+					var _this = this,
+						s = this.data.ui.to_select;
+					s = $.map($.makeArray(s), function (n) { return "#" + n.toString().replace(/^#/,"").replace('\\/','/').replace('/','\\/'); });
+					this.deselect_all();
+					$.each(s, function (i, val) { _this.check_node(val); });
+					this.__callback();
+				}
+			}
+		}
+	});
+})(jQuery);
+//*/
+
+/* 
+ * jsTree XML 1.0
+ * The XML data store. Datastores are build by overriding the `load_node` and `_is_loaded` functions.
+ */
+(function ($) {
+	$.vakata.xslt = function (xml, xsl, callback) {
+		var rs = "", xm, xs, processor, support;
+		if(document.recalc) {
+			xm = document.createElement('xml');
+			xs = document.createElement('xml');
+			xm.innerHTML = xml;
+			xs.innerHTML = xsl;
+			$("body").append(xm).append(xs);
+			setTimeout( (function (xm, xs, callback) {
+				return function () {
+					callback.call(null, xm.transformNode(xs.XMLDocument));
+					setTimeout( (function (xm, xs) { return function () { jQuery("body").remove(xm).remove(xs); }; })(xm, xs), 200);
+				};
+			}) (xm, xs, callback), 100);
+			return true;
+		}
+		if(typeof window.DOMParser !== "undefined" && typeof window.XMLHttpRequest !== "undefined" && typeof window.XSLTProcessor !== "undefined") {
+			processor = new XSLTProcessor();
+			support = $.isFunction(processor.transformDocument) ? (typeof window.XMLSerializer !== "undefined") : true;
+			if(!support) { return false; }
+			xml = new DOMParser().parseFromString(xml, "text/xml");
+			xsl = new DOMParser().parseFromString(xsl, "text/xml");
+			if($.isFunction(processor.transformDocument)) {
+				rs = document.implementation.createDocument("", "", null);
+				processor.transformDocument(xml, xsl, rs, null);
+				callback.call(null, XMLSerializer().serializeToString(rs));
+				return true;
+			}
+			else {
+				processor.importStylesheet(xsl);
+				rs = processor.transformToFragment(xml, document);
+				callback.call(null, $("<div>").append(rs).html());
+				return true;
+			}
+		}
+		return false;
+	};
+	var xsl = {
+		'nest' : '<?xml version="1.0" encoding="utf-8" ?>' + 
+			'<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform" >' + 
+			'<xsl:output method="html" encoding="utf-8" omit-xml-declaration="yes" standalone="no" indent="no" media-type="text/html" />' + 
+			'<xsl:template match="/">' + 
+			'	<xsl:call-template name="nodes">' + 
+			'		<xsl:with-param name="node" select="/root" />' + 
+			'	</xsl:call-template>' + 
+			'</xsl:template>' + 
+			'<xsl:template name="nodes">' + 
+			'	<xsl:param name="node" />' + 
+			'	<ul>' + 
+			'	<xsl:for-each select="$node/item">' + 
+			'		<xsl:variable name="children" select="count(./item) &gt; 0" />' + 
+			'		<li>' + 
+			'			<xsl:attribute name="class">' + 
+			'				<xsl:if test="position() = last()">jstree-last </xsl:if>' + 
+			'				<xsl:choose>' + 
+			'					<xsl:when test="@state = \'open\'">jstree-open </xsl:when>' + 
+			'					<xsl:when test="$children or @hasChildren or @state = \'closed\'">jstree-closed </xsl:when>' + 
+			'					<xsl:otherwise>jstree-leaf </xsl:otherwise>' + 
+			'				</xsl:choose>' + 
+			'				<xsl:value-of select="@class" />' + 
+			'			</xsl:attribute>' + 
+			'			<xsl:for-each select="@*">' + 
+			'				<xsl:if test="name() != \'class\' and name() != \'state\' and name() != \'hasChildren\'">' + 
+			'					<xsl:attribute name="{name()}"><xsl:value-of select="." /></xsl:attribute>' + 
+			'				</xsl:if>' + 
+			'			</xsl:for-each>' + 
+			'	<ins class="jstree-icon"><xsl:text>&#xa0;</xsl:text></ins>' + 
+			'			<xsl:for-each select="content/name">' + 
+			'				<a>' + 
+			'				<xsl:attribute name="href">' + 
+			'					<xsl:choose>' + 
+			'					<xsl:when test="@href"><xsl:value-of select="@href" /></xsl:when>' + 
+			'					<xsl:otherwise>#</xsl:otherwise>' + 
+			'					</xsl:choose>' + 
+			'				</xsl:attribute>' + 
+			'				<xsl:attribute name="class"><xsl:value-of select="@lang" /> <xsl:value-of select="@class" /></xsl:attribute>' + 
+			'				<xsl:attribute name="style"><xsl:value-of select="@style" /></xsl:attribute>' + 
+			'				<xsl:for-each select="@*">' + 
+			'					<xsl:if test="name() != \'style\' and name() != \'class\' and name() != \'href\'">' + 
+			'						<xsl:attribute name="{name()}"><xsl:value-of select="." /></xsl:attribute>' + 
+			'					</xsl:if>' + 
+			'				</xsl:for-each>' + 
+			'					<ins>' + 
+			'						<xsl:attribute name="class">jstree-icon ' + 
+			'							<xsl:if test="string-length(attribute::icon) > 0 and not(contains(@icon,\'/\'))"><xsl:value-of select="@icon" /></xsl:if>' + 
+			'						</xsl:attribute>' + 
+			'						<xsl:if test="string-length(attribute::icon) > 0 and contains(@icon,\'/\')"><xsl:attribute name="style">background:url(<xsl:value-of select="@icon" />) center center no-repeat;</xsl:attribute></xsl:if>' + 
+			'						<xsl:text>&#xa0;</xsl:text>' + 
+			'					</ins>' + 
+			'					<xsl:value-of select="current()" />' + 
+			'				</a>' + 
+			'			</xsl:for-each>' + 
+			'			<xsl:if test="$children or @hasChildren"><xsl:call-template name="nodes"><xsl:with-param name="node" select="current()" /></xsl:call-template></xsl:if>' + 
+			'		</li>' + 
+			'	</xsl:for-each>' + 
+			'	</ul>' + 
+			'</xsl:template>' + 
+			'</xsl:stylesheet>',
+
+		'flat' : '<?xml version="1.0" encoding="utf-8" ?>' + 
+			'<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform" >' + 
+			'<xsl:output method="html" encoding="utf-8" omit-xml-declaration="yes" standalone="no" indent="no" media-type="text/xml" />' + 
+			'<xsl:template match="/">' + 
+			'	<ul>' + 
+			'	<xsl:for-each select="//item[not(@parent_id) or @parent_id=0 or not(@parent_id = //item/@id)]">' + /* the last `or` may be removed */
+			'		<xsl:call-template name="nodes">' + 
+			'			<xsl:with-param name="node" select="." />' + 
+			'			<xsl:with-param name="is_last" select="number(position() = last())" />' + 
+			'		</xsl:call-template>' + 
+			'	</xsl:for-each>' + 
+			'	</ul>' + 
+			'</xsl:template>' + 
+			'<xsl:template name="nodes">' + 
+			'	<xsl:param name="node" />' + 
+			'	<xsl:param name="is_last" />' + 
+			'	<xsl:variable name="children" select="count(//item[@parent_id=$node/attribute::id]) &gt; 0" />' + 
+			'	<li>' + 
+			'	<xsl:attribute name="class">' + 
+			'		<xsl:if test="$is_last = true()">jstree-last </xsl:if>' + 
+			'		<xsl:choose>' + 
+			'			<xsl:when test="@state = \'open\'">jstree-open </xsl:when>' + 
+			'			<xsl:when test="$children or @hasChildren or @state = \'closed\'">jstree-closed </xsl:when>' + 
+			'			<xsl:otherwise>jstree-leaf </xsl:otherwise>' + 
+			'		</xsl:choose>' + 
+			'		<xsl:value-of select="@class" />' + 
+			'	</xsl:attribute>' + 
+			'	<xsl:for-each select="@*">' + 
+			'		<xsl:if test="name() != \'parent_id\' and name() != \'hasChildren\' and name() != \'class\' and name() != \'state\'">' + 
+			'		<xsl:attribute name="{name()}"><xsl:value-of select="." /></xsl:attribute>' + 
+			'		</xsl:if>' + 
+			'	</xsl:for-each>' + 
+			'	<ins class="jstree-icon"><xsl:text>&#xa0;</xsl:text></ins>' + 
+			'	<xsl:for-each select="content/name">' + 
+			'		<a>' + 
+			'		<xsl:attribute name="href">' + 
+			'			<xsl:choose>' + 
+			'			<xsl:when test="@href"><xsl:value-of select="@href" /></xsl:when>' + 
+			'			<xsl:otherwise>#</xsl:otherwise>' + 
+			'			</xsl:choose>' + 
+			'		</xsl:attribute>' + 
+			'		<xsl:attribute name="class"><xsl:value-of select="@lang" /> <xsl:value-of select="@class" /></xsl:attribute>' + 
+			'		<xsl:attribute name="style"><xsl:value-of select="@style" /></xsl:attribute>' + 
+			'		<xsl:for-each select="@*">' + 
+			'			<xsl:if test="name() != \'style\' and name() != \'class\' and name() != \'href\'">' + 
+			'				<xsl:attribute name="{name()}"><xsl:value-of select="." /></xsl:attribute>' + 
+			'			</xsl:if>' + 
+			'		</xsl:for-each>' + 
+			'			<ins>' + 
+			'				<xsl:attribute name="class">jstree-icon ' + 
+			'					<xsl:if test="string-length(attribute::icon) > 0 and not(contains(@icon,\'/\'))"><xsl:value-of select="@icon" /></xsl:if>' + 
+			'				</xsl:attribute>' + 
+			'				<xsl:if test="string-length(attribute::icon) > 0 and contains(@icon,\'/\')"><xsl:attribute name="style">background:url(<xsl:value-of select="@icon" />) center center no-repeat;</xsl:attribute></xsl:if>' + 
+			'				<xsl:text>&#xa0;</xsl:text>' + 
+			'			</ins>' + 
+			'			<xsl:value-of select="current()" />' + 
+			'		</a>' + 
+			'	</xsl:for-each>' + 
+			'	<xsl:if test="$children">' + 
+			'		<ul>' + 
+			'		<xsl:for-each select="//item[@parent_id=$node/attribute::id]">' + 
+			'			<xsl:call-template name="nodes">' + 
+			'				<xsl:with-param name="node" select="." />' + 
+			'				<xsl:with-param name="is_last" select="number(position() = last())" />' + 
+			'			</xsl:call-template>' + 
+			'		</xsl:for-each>' + 
+			'		</ul>' + 
+			'	</xsl:if>' + 
+			'	</li>' + 
+			'</xsl:template>' + 
+			'</xsl:stylesheet>'
+	};
+	$.jstree.plugin("xml_data", {
+		defaults : { 
+			data : false,
+			ajax : false,
+			xsl : "flat",
+			clean_node : false,
+			correct_state : true
+		},
+		_fn : {
+			load_node : function (obj, s_call, e_call) { var _this = this; this.load_node_xml(obj, function () { _this.__callback({ "obj" : obj }); s_call.call(this); }, e_call); },
+			_is_loaded : function (obj) { 
+				var s = this._get_settings().xml_data;
+				obj = this._get_node(obj);
+				return obj == -1 || !obj || !s.ajax || obj.is(".jstree-open, .jstree-leaf") || obj.children("ul").children("li").size() > 0;
+			},
+			load_node_xml : function (obj, s_call, e_call) {
+				var s = this.get_settings().xml_data,
+					error_func = function () {},
+					success_func = function () {};
+
+				obj = this._get_node(obj);
+				if(obj && obj !== -1) {
+					if(obj.data("jstree-is-loading")) { return; }
+					else { obj.data("jstree-is-loading",true); }
+				}
+				switch(!0) {
+					case (!s.data && !s.ajax): throw "Neither data nor ajax settings supplied.";
+					case (!!s.data && !s.ajax) || (!!s.data && !!s.ajax && (!obj || obj === -1)):
+						if(!obj || obj == -1) {
+							this.parse_xml(s.data, $.proxy(function (d) {
+								if(d) {
+									d = d.replace(/ ?xmlns="[^"]*"/ig, "");
+									if(d.length > 10) {
+										d = $(d);
+										this.get_container().children("ul").empty().append(d.children());
+										if(s.clean_node) { this.clean_node(obj); }
+										if(s_call) { s_call.call(this); }
+									}
+								}
+								else { 
+									if(s.correct_state) { 
+										this.get_container().children("ul").empty(); 
+										if(s_call) { s_call.call(this); }
+									}
+								}
+							}, this));
+						}
+						break;
+					case (!s.data && !!s.ajax) || (!!s.data && !!s.ajax && obj && obj !== -1):
+						error_func = function (x, t, e) {
+							var ef = this.get_settings().xml_data.ajax.error; 
+							if(ef) { ef.call(this, x, t, e); }
+							if(obj !== -1 && obj.length) {
+								obj.children(".jstree-loading").removeClass("jstree-loading");
+								obj.data("jstree-is-loading",false);
+								if(t === "success" && s.correct_state) { obj.removeClass("jstree-open jstree-closed").addClass("jstree-leaf"); }
+							}
+							else {
+								if(t === "success" && s.correct_state) { this.get_container().children("ul").empty(); }
+							}
+							if(e_call) { e_call.call(this); }
+						};
+						success_func = function (d, t, x) {
+							d = x.responseText;
+							var sf = this.get_settings().xml_data.ajax.success; 
+							if(sf) { d = sf.call(this,d,t,x) || d; }
+							if(d == "") {
+								return error_func.call(this, x, t, "");
+							}
+							this.parse_xml(d, $.proxy(function (d) {
+								if(d) {
+									d = d.replace(/ ?xmlns="[^"]*"/ig, "");
+									if(d.length > 10) {
+										d = $(d);
+										if(obj === -1 || !obj) { this.get_container().children("ul").empty().append(d.children()); }
+										else { obj.children(".jstree-loading").removeClass("jstree-loading"); obj.append(d); obj.data("jstree-is-loading",false); }
+										if(s.clean_node) { this.clean_node(obj); }
+										if(s_call) { s_call.call(this); }
+									}
+									else {
+										if(obj && obj !== -1) { 
+											obj.children(".jstree-loading").removeClass("jstree-loading");
+											obj.data("jstree-is-loading",false);
+											if(s.correct_state) { 
+												obj.removeClass("jstree-open jstree-closed").addClass("jstree-leaf"); 
+												if(s_call) { s_call.call(this); } 
+											}
+										}
+										else {
+											if(s.correct_state) { 
+												this.get_container().children("ul").empty();
+												if(s_call) { s_call.call(this); } 
+											}
+										}
+									}
+								}
+							}, this));
+						};
+						s.ajax.context = this;
+						s.ajax.error = error_func;
+						s.ajax.success = success_func;
+						if(!s.ajax.dataType) { s.ajax.dataType = "xml"; }
+						if($.isFunction(s.ajax.url)) { s.ajax.url = s.ajax.url.call(this, obj); }
+						if($.isFunction(s.ajax.data)) { s.ajax.data = s.ajax.data.call(this, obj); }
+						$.ajax(s.ajax);
+						break;
+				}
+			},
+			parse_xml : function (xml, callback) {
+				var s = this._get_settings().xml_data;
+				$.vakata.xslt(xml, xsl[s.xsl], callback);
+			},
+			get_xml : function (tp, obj, li_attr, a_attr, is_callback) {
+				var result = "", 
+					s = this._get_settings(), 
+					_this = this,
+					tmp1, tmp2, li, a, lang;
+				if(!tp) { tp = "flat"; }
+				if(!is_callback) { is_callback = 0; }
+				obj = this._get_node(obj);
+				if(!obj || obj === -1) { obj = this.get_container().find("> ul > li"); }
+				li_attr = $.isArray(li_attr) ? li_attr : [ "id", "class" ];
+				if(!is_callback && this.data.types && $.inArray(s.types.type_attr, li_attr) === -1) { li_attr.push(s.types.type_attr); }
+
+				a_attr = $.isArray(a_attr) ? a_attr : [ ];
+
+				if(!is_callback) { result += "<root>"; }
+				obj.each(function () {
+					result += "<item";
+					li = $(this);
+					$.each(li_attr, function (i, v) { result += " " + v + "=\"" + (li.attr(v) || "").replace(/jstree[^ ]*|$/ig,'').replace(/^\s+$/ig,"") + "\""; });
+					if(li.hasClass("jstree-open")) { result += " state=\"open\""; }
+					if(li.hasClass("jstree-closed")) { result += " state=\"closed\""; }
+					if(tp === "flat") { result += " parent_id=\"" + is_callback + "\""; }
+					result += ">";
+					result += "<content>";
+					a = li.children("a");
+					a.each(function () {
+						tmp1 = $(this);
+						lang = false;
+						result += "<name";
+						if($.inArray("languages", s.plugins) !== -1) {
+							$.each(s.languages, function (k, z) {
+								if(tmp1.hasClass(z)) { result += " lang=\"" + z + "\""; lang = z; return false; }
+							});
+						}
+						if(a_attr.length) { 
+							$.each(a_attr, function (k, z) {
+								result += " " + z + "=\"" + (tmp1.attr(z) || "").replace(/jstree[^ ]*|$/ig,'') + "\"";
+							});
+						}
+						if(tmp1.children("ins").get(0).className.replace(/jstree[^ ]*|$/ig,'').replace(/^\s+$/ig,"").length) {
+							result += ' icon="' + tmp1.children("ins").get(0).className.replace(/jstree[^ ]*|$/ig,'').replace(/^\s+$/ig,"") + '"';
+						}
+						if(tmp1.children("ins").get(0).style.backgroundImage.length) {
+							result += ' icon="' + tmp1.children("ins").get(0).style.backgroundImage.replace("url(","").replace(")","") + '"';
+						}
+						result += ">";
+						result += "<![CDATA[" + _this.get_text(tmp1, lang) + "]]>";
+						result += "</name>";
+					});
+					result += "</content>";
+					tmp2 = li[0].id;
+					li = li.find("> ul > li");
+					if(li.length) { tmp2 = _this.get_xml(tp, li, li_attr, a_attr, tmp2); }
+					else { tmp2 = ""; }
+					if(tp == "nest") { result += tmp2; }
+					result += "</item>";
+					if(tp == "flat") { result += tmp2; }
+				});
+				if(!is_callback) { result += "</root>"; }
+				return result;
+			}
+		}
+	});
+})(jQuery);
+//*/
+
+/*
+ * jsTree search plugin 1.0
+ * Enables both sync and async search on the tree
+ * DOES NOT WORK WITH JSON PROGRESSIVE RENDER
+ */
+(function ($) {
+	$.expr[':'].jstree_contains = function(a,i,m){
+		return (a.textContent || a.innerText || "").toLowerCase().indexOf(m[3].toLowerCase())>=0;
+	};
+	$.jstree.plugin("search", {
+		__init : function () {
+			this.data.search.str = "";
+			this.data.search.result = $();
+		},
+		defaults : {
+			ajax : false, // OR ajax object
+			case_insensitive : false
+		},
+		_fn : {
+			search : function (str, skip_async) {
+				if(str === "") { return; }
+				var s = this.get_settings().search, 
+					t = this,
+					error_func = function () { },
+					success_func = function () { };
+				this.data.search.str = str;
+
+				if(!skip_async && s.ajax !== false && this.get_container().find(".jstree-closed:eq(0)").length > 0) {
+					this.search.supress_callback = true;
+					error_func = function () { };
+					success_func = function (d, t, x) {
+						var sf = this.get_settings().search.ajax.success; 
+						if(sf) { d = sf.call(this,d,t,x) || d; }
+						this.data.search.to_open = d;
+						this._search_open();
+					};
+					s.ajax.context = this;
+					s.ajax.error = error_func;
+					s.ajax.success = success_func;
+					if($.isFunction(s.ajax.url)) { s.ajax.url = s.ajax.url.call(this, str); }
+					if($.isFunction(s.ajax.data)) { s.ajax.data = s.ajax.data.call(this, str); }
+					if(!s.ajax.data) { s.ajax.data = { "search_string" : str }; }
+					if(!s.ajax.dataType || /^json/.exec(s.ajax.dataType)) { s.ajax.dataType = "json"; }
+					$.ajax(s.ajax);
+					return;
+				}
+				if(this.data.search.result.length) { this.clear_search(); }
+				this.data.search.result = this.get_container().find("a" + (this.data.languages ? "." + this.get_lang() : "" ) + ":" + (s.case_insensitive ? "jstree_contains" : "contains") + "(" + this.data.search.str + ")");
+				this.data.search.result.addClass("jstree-search").parents(".jstree-closed").each(function () {
+					t.open_node(this, false, true);
+				});
+				this.__callback({ nodes : this.data.search.result, str : str });
+			},
+			clear_search : function (str) {
+				this.data.search.result.removeClass("jstree-search");
+				this.__callback(this.data.search.result);
+				this.data.search.result = $();
+			},
+			_search_open : function (is_callback) {
+				var _this = this,
+					done = true,
+					current = [],
+					remaining = [];
+				if(this.data.search.to_open.length) {
+					$.each(this.data.search.to_open, function (i, val) {
+						if(val == "#") { return true; }
+						if($(val).length && $(val).is(".jstree-closed")) { current.push(val); }
+						else { remaining.push(val); }
+					});
+					if(current.length) {
+						this.data.search.to_open = remaining;
+						$.each(current, function (i, val) { 
+							_this.open_node(val, function () { _this._search_open(true); }); 
+						});
+						done = false;
+					}
+				}
+				if(done) { this.search(this.data.search.str, true); }
+			}
+		}
+	});
+})(jQuery);
+//*/
+
+/*
+ * jsTree contextmenu plugin 1.0
+ */
+(function ($) {
+	$.vakata.context = {
+		cnt		: $("<div id='vakata-contextmenu'>"),
+		vis		: false,
+		tgt		: false,
+		par		: false,
+		func	: false,
+		data	: false,
+		show	: function (s, t, x, y, d, p) {
+			var html = $.vakata.context.parse(s), h, w;
+			if(!html) { return; }
+			$.vakata.context.vis = true;
+			$.vakata.context.tgt = t;
+			$.vakata.context.par = p || t || null;
+			$.vakata.context.data = d || null;
+			$.vakata.context.cnt
+				.html(html)
+				.css({ "visibility" : "hidden", "display" : "block", "left" : 0, "top" : 0 });
+			h = $.vakata.context.cnt.height();
+			w = $.vakata.context.cnt.width();
+			if(x + w > $(document).width()) { 
+				x = $(document).width() - (w + 5); 
+				$.vakata.context.cnt.find("li > ul").addClass("right"); 
+			}
+			if(y + h > $(document).height()) { 
+				y = y - (h + t[0].offsetHeight); 
+				$.vakata.context.cnt.find("li > ul").addClass("bottom"); 
+			}
+
+			$.vakata.context.cnt
+				.css({ "left" : x, "top" : y })
+				.find("li:has(ul)")
+					.bind("mouseenter", function (e) { 
+						var w = $(document).width(),
+							h = $(document).height(),
+							ul = $(this).children("ul").show(); 
+						if(w !== $(document).width()) { ul.toggleClass("right"); }
+						if(h !== $(document).height()) { ul.toggleClass("bottom"); }
+					})
+					.bind("mouseleave", function (e) { 
+						$(this).children("ul").hide(); 
+					})
+					.end()
+				.css({ "visibility" : "visible" })
+				.show();
+			$(document).triggerHandler("context_show.vakata");
+		},
+		hide	: function () {
+			$.vakata.context.vis = false;
+			$.vakata.context.cnt.attr("class","").hide();
+			$(document).triggerHandler("context_hide.vakata");
+		},
+		parse	: function (s, is_callback) {
+			if(!s) { return false; }
+			var str = "",
+				tmp = false,
+				was_sep = true;
+			if(!is_callback) { $.vakata.context.func = {}; }
+			str += "<ul>";
+			$.each(s, function (i, val) {
+				if(!val) { return true; }
+				$.vakata.context.func[i] = val.action;
+				if(!was_sep && val.separator_before) {
+					str += "<li class='vakata-separator vakata-separator-before'></li>";
+				}
+				was_sep = false;
+				str += "<li class='" + (val._class || "") + (val._disabled ? " jstree-contextmenu-disabled " : "") + "'><ins ";
+				if(val.icon && val.icon.indexOf("/") === -1) { str += " class='" + val.icon + "' "; }
+				if(val.icon && val.icon.indexOf("/") !== -1) { str += " style='background:url(" + val.icon + ") center center no-repeat;' "; }
+				str += ">&#160;</ins><a href='#' rel='" + i + "'>";
+				if(val.submenu) {
+					str += "<span style='float:right;'>&raquo;</span>";
+				}
+				str += val.label + "</a>";
+				if(val.submenu) {
+					tmp = $.vakata.context.parse(val.submenu, true);
+					if(tmp) { str += tmp; }
+				}
+				str += "</li>";
+				if(val.separator_after) {
+					str += "<li class='vakata-separator vakata-separator-after'></li>";
+					was_sep = true;
+				}
+			});
+			str = str.replace(/<li class\='vakata-separator vakata-separator-after'\><\/li\>$/,"");
+			str += "</ul>";
+			return str.length > 10 ? str : false;
+		},
+		exec	: function (i) {
+			if($.isFunction($.vakata.context.func[i])) {
+				$.vakata.context.func[i].call($.vakata.context.data, $.vakata.context.par);
+				return true;
+			}
+			else { return false; }
+		}
+	};
+	$(function () {
+		var css_string = '' + 
+			'#vakata-contextmenu { display:none; position:absolute; margin:0; padding:0; min-width:180px; background:#ebebeb; border:1px solid silver; z-index:10000; *width:180px; } ' + 
+			'#vakata-contextmenu ul { min-width:180px; *width:180px; } ' + 
+			'#vakata-contextmenu ul, #vakata-contextmenu li { margin:0; padding:0; list-style-type:none; display:block; } ' + 
+			'#vakata-contextmenu li { line-height:20px; min-height:20px; position:relative; padding:0px; } ' + 
+			'#vakata-contextmenu li a { padding:1px 6px; line-height:17px; display:block; text-decoration:none; margin:1px 1px 0 1px; } ' + 
+			'#vakata-contextmenu li ins { float:left; width:16px; height:16px; text-decoration:none; margin-right:2px; } ' + 
+			'#vakata-contextmenu li a:hover, #vakata-contextmenu li.vakata-hover > a { background:gray; color:white; } ' + 
+			'#vakata-contextmenu li ul { display:none; position:absolute; top:-2px; left:100%; background:#ebebeb; border:1px solid gray; } ' + 
+			'#vakata-contextmenu .right { right:100%; left:auto; } ' + 
+			'#vakata-contextmenu .bottom { bottom:-1px; top:auto; } ' + 
+			'#vakata-contextmenu li.vakata-separator { min-height:0; height:1px; line-height:1px; font-size:1px; overflow:hidden; margin:0 2px; background:silver; /* border-top:1px solid #fefefe; */ padding:0; } ';
+		$.vakata.css.add_sheet({ str : css_string });
+		$.vakata.context.cnt
+			.delegate("a","click", function (e) { e.preventDefault(); })
+			.delegate("a","mouseup", function (e) {
+				if(!$(this).parent().hasClass("jstree-contextmenu-disabled") && $.vakata.context.exec($(this).attr("rel"))) {
+					$.vakata.context.hide();
+				}
+				else { $(this).blur(); }
+			})
+			.delegate("a","mouseover", function () {
+				$.vakata.context.cnt.find(".vakata-hover").removeClass("vakata-hover");
+			})
+			.appendTo("body");
+		$(document).bind("mousedown", function (e) { if($.vakata.context.vis && !$.contains($.vakata.context.cnt[0], e.target)) { $.vakata.context.hide(); } });
+		if(typeof $.hotkeys !== "undefined") {
+			$(document)
+				.bind("keydown", "up", function (e) { 
+					if($.vakata.context.vis) { 
+						var o = $.vakata.context.cnt.find("ul:visible").last().children(".vakata-hover").removeClass("vakata-hover").prevAll("li:not(.vakata-separator)").first();
+						if(!o.length) { o = $.vakata.context.cnt.find("ul:visible").last().children("li:not(.vakata-separator)").last(); }
+						o.addClass("vakata-hover");
+						e.stopImmediatePropagation(); 
+						e.preventDefault();
+					} 
+				})
+				.bind("keydown", "down", function (e) { 
+					if($.vakata.context.vis) { 
+						var o = $.vakata.context.cnt.find("ul:visible").last().children(".vakata-hover").removeClass("vakata-hover").nextAll("li:not(.vakata-separator)").first();
+						if(!o.length) { o = $.vakata.context.cnt.find("ul:visible").last().children("li:not(.vakata-separator)").first(); }
+						o.addClass("vakata-hover");
+						e.stopImmediatePropagation(); 
+						e.preventDefault();
+					} 
+				})
+				.bind("keydown", "right", function (e) { 
+					if($.vakata.context.vis) { 
+						$.vakata.context.cnt.find(".vakata-hover").children("ul").show().children("li:not(.vakata-separator)").removeClass("vakata-hover").first().addClass("vakata-hover");
+						e.stopImmediatePropagation(); 
+						e.preventDefault();
+					} 
+				})
+				.bind("keydown", "left", function (e) { 
+					if($.vakata.context.vis) { 
+						$.vakata.context.cnt.find(".vakata-hover").children("ul").hide().children(".vakata-separator").removeClass("vakata-hover");
+						e.stopImmediatePropagation(); 
+						e.preventDefault();
+					} 
+				})
+				.bind("keydown", "esc", function (e) { 
+					$.vakata.context.hide(); 
+					e.preventDefault();
+				})
+				.bind("keydown", "space", function (e) { 
+					$.vakata.context.cnt.find(".vakata-hover").last().children("a").click();
+					e.preventDefault();
+				});
+		}
+	});
+
+	$.jstree.plugin("contextmenu", {
+		__init : function () {
+			this.get_container()
+				.delegate("a", "contextmenu.jstree", $.proxy(function (e) {
+						e.preventDefault();
+						this.show_contextmenu(e.currentTarget, e.pageX, e.pageY);
+					}, this))
+				.bind("destroy.jstree", $.proxy(function () {
+						if(this.data.contextmenu) {
+							$.vakata.context.hide();
+						}
+					}, this));
+			$(document).bind("context_hide.vakata", $.proxy(function () { this.data.contextmenu = false; }, this));
+		},
+		defaults : { 
+			select_node : false, // requires UI plugin
+			show_at_node : true,
+			items : { // Could be a function that should return an object like this one
+				"create" : {
+					"separator_before"	: false,
+					"separator_after"	: true,
+					"label"				: "Create",
+					"action"			: function (obj) { this.create(obj); }
+				},
+				"rename" : {
+					"separator_before"	: false,
+					"separator_after"	: false,
+					"label"				: "Rename",
+					"action"			: function (obj) { this.rename(obj); }
+				},
+				"remove" : {
+					"separator_before"	: false,
+					"icon"				: false,
+					"separator_after"	: false,
+					"label"				: "Delete",
+					"action"			: function (obj) { this.remove(obj); }
+				},
+				"ccp" : {
+					"separator_before"	: true,
+					"icon"				: false,
+					"separator_after"	: false,
+					"label"				: "Edit",
+					"action"			: false,
+					"submenu" : { 
+						"cut" : {
+							"separator_before"	: false,
+							"separator_after"	: false,
+							"label"				: "Cut",
+							"action"			: function (obj) { this.cut(obj); }
+						},
+						"copy" : {
+							"separator_before"	: false,
+							"icon"				: false,
+							"separator_after"	: false,
+							"label"				: "Copy",
+							"action"			: function (obj) { this.copy(obj); }
+						},
+						"paste" : {
+							"separator_before"	: false,
+							"icon"				: false,
+							"separator_after"	: false,
+							"label"				: "Paste",
+							"action"			: function (obj) { this.paste(obj); }
+						}
+					}
+				}
+			}
+		},
+		_fn : {
+			show_contextmenu : function (obj, x, y) {
+				obj = this._get_node(obj);
+				var s = this.get_settings().contextmenu,
+					a = obj.children("a:visible:eq(0)"),
+					o = false;
+				if(s.select_node && this.data.ui && !this.is_selected(obj)) {
+					this.deselect_all();
+					this.select_node(obj, true);
+				}
+				if(s.show_at_node || typeof x === "undefined" || typeof y === "undefined") {
+					o = a.offset();
+					x = o.left;
+					y = o.top + this.data.core.li_height;
+				}
+				if($.isFunction(s.items)) { s.items = s.items.call(this, obj); }
+				this.data.contextmenu = true;
+				$.vakata.context.show(s.items, a, x, y, this, obj);
+				if(this.data.themes) { $.vakata.context.cnt.attr("class", "jstree-" + this.data.themes.theme + "-context"); }
+			}
+		}
+	});
+})(jQuery);
+//*/
+
+/* 
+ * jsTree types plugin 1.0
+ * Adds support types of nodes
+ * You can set an attribute on each li node, that represents its type.
+ * According to the type setting the node may get custom icon/validation rules
+ */
+(function ($) {
+	$.jstree.plugin("types", {
+		__init : function () {
+			var s = this._get_settings().types;
+			this.data.types.attach_to = [];
+			this.get_container()
+				.bind("init.jstree", $.proxy(function () { 
+						var types = s.types, 
+							attr  = s.type_attr, 
+							icons_css = "", 
+							_this = this;
+
+						$.each(types, function (i, tp) {
+							$.each(tp, function (k, v) { 
+								if(!/^(max_depth|max_children|icon|valid_children)$/.test(k)) { _this.data.types.attach_to.push(k); }
+							});
+							if(!tp.icon) { return true; }
+							if( tp.icon.image || tp.icon.position) {
+								if(i == "default")	{ icons_css += '.jstree-' + _this.get_index() + ' a > .jstree-icon { '; }
+								else				{ icons_css += '.jstree-' + _this.get_index() + ' li[' + attr + '=' + i + '] > a > .jstree-icon { '; }
+								if(tp.icon.image)	{ icons_css += ' background-image:url(' + tp.icon.image + '); '; }
+								if(tp.icon.position){ icons_css += ' background-position:' + tp.icon.position + '; '; }
+								else				{ icons_css += ' background-position:0 0; '; }
+								icons_css += '} ';
+							}
+						});
+						if(icons_css != "") { $.vakata.css.add_sheet({ 'str' : icons_css }); }
+					}, this))
+				.bind("before.jstree", $.proxy(function (e, data) { 
+						if($.inArray(data.func, this.data.types.attach_to) !== -1) {
+							var s = this._get_settings().types.types,
+								t = this._get_type(data.args[0]);
+							if(
+								( 
+									(s[t] && typeof s[t][data.func] !== "undefined") || 
+									(s["default"] && typeof s["default"][data.func] !== "undefined")
+								) && !this._check(data.func, data.args[0])
+							) {
+								e.stopImmediatePropagation();
+								return false;
+							}
+						}
+					}, this));
+		},
+		defaults : {
+			// defines maximum number of root nodes (-1 means unlimited, -2 means disable max_children checking)
+			max_children		: -1,
+			// defines the maximum depth of the tree (-1 means unlimited, -2 means disable max_depth checking)
+			max_depth			: -1,
+			// defines valid node types for the root nodes
+			valid_children		: "all",
+
+			// where is the type stores (the rel attribute of the LI element)
+			type_attr : "rel",
+			// a list of types
+			types : {
+				// the default type
+				"default" : {
+					"max_children"	: -1,
+					"max_depth"		: -1,
+					"valid_children": "all"
+
+					// Bound functions - you can bind any other function here (using boolean or function)
+					//"select_node"	: true,
+					//"open_node"	: true,
+					//"close_node"	: true,
+					//"create_node"	: true,
+					//"delete_node"	: true
+				}
+			}
+		},
+		_fn : {
+			_get_type : function (obj) {
+				obj = this._get_node(obj);
+				return (!obj || !obj.length) ? false : obj.attr(this._get_settings().types.type_attr) || "default";
+			},
+			set_type : function (str, obj) {
+				obj = this._get_node(obj);
+				return (!obj.length || !str) ? false : obj.attr(this._get_settings().types.type_attr, str);
+			},
+			_check : function (rule, obj, opts) {
+				var v = false, t = this._get_type(obj), d = 0, _this = this, s = this._get_settings().types;
+				if(obj === -1) { 
+					if(!!s[rule]) { v = s[rule]; }
+					else { return; }
+				}
+				else {
+					if(t === false) { return; }
+					if(!!s.types[t] && !!s.types[t][rule]) { v = s.types[t][rule]; }
+					else if(!!s.types["default"] && !!s.types["default"][rule]) { v = s.types["default"][rule]; }
+				}
+				if($.isFunction(v)) { v = v.call(this, obj); }
+				if(rule === "max_depth" && obj !== -1 && opts !== false && s.max_depth !== -2 && v !== 0) {
+					// also include the node itself - otherwise if root node it is not checked
+					this._get_node(obj).children("a:eq(0)").parentsUntil(".jstree","li").each(function (i) {
+						// check if current depth already exceeds global tree depth
+						if(s.max_depth !== -1 && s.max_depth - (i + 1) <= 0) { v = 0; return false; }
+						d = (i === 0) ? v : _this._check(rule, this, false);
+						// check if current node max depth is already matched or exceeded
+						if(d !== -1 && d - (i + 1) <= 0) { v = 0; return false; }
+						// otherwise - set the max depth to the current value minus current depth
+						if(d >= 0 && (d - (i + 1) < v || v < 0) ) { v = d - (i + 1); }
+						// if the global tree depth exists and it minus the nodes calculated so far is less than `v` or `v` is unlimited
+						if(s.max_depth >= 0 && (s.max_depth - (i + 1) < v || v < 0) ) { v = s.max_depth - (i + 1); }
+					});
+				}
+				return v;
+			},
+			check_move : function () {
+				if(!this.__call_old()) { return false; }
+				var m  = this._get_move(),
+					s  = m.rt._get_settings().types,
+					mc = m.rt._check("max_children", m.cr),
+					md = m.rt._check("max_depth", m.cr),
+					vc = m.rt._check("valid_children", m.cr),
+					ch = 0, d = 1, t;
+
+				if(vc === "none") { return false; } 
+				if($.isArray(vc) && m.ot && m.ot._get_type) {
+					m.o.each(function () {
+						if($.inArray(m.ot._get_type(this), vc) === -1) { d = false; return false; }
+					});
+					if(d === false) { return false; }
+				}
+				if(s.max_children !== -2 && mc !== -1) {
+					ch = m.cr === -1 ? this.get_container().children("> ul > li").not(m.o).length : m.cr.children("> ul > li").not(m.o).length;
+					if(ch + m.o.length > mc) { return false; }
+				}
+				if(s.max_depth !== -2 && md !== -1) {
+					d = 0;
+					if(md === 0) { return false; }
+					if(typeof m.o.d === "undefined") {
+						// TODO: deal with progressive rendering and async when checking max_depth (how to know the depth of the moved node)
+						t = m.o;
+						while(t.length > 0) {
+							t = t.find("> ul > li");
+							d ++;
+						}
+						m.o.d = d;
+					}
+					if(md - m.o.d < 0) { return false; }
+				}
+				return true;
+			},
+			create_node : function (obj, position, js, callback, is_loaded, skip_check) {
+				if(!skip_check && (is_loaded || this._is_loaded(obj))) {
+					var p  = (position && position.match(/^before|after$/i) && obj !== -1) ? this._get_parent(obj) : this._get_node(obj),
+						s  = this._get_settings().types,
+						mc = this._check("max_children", p),
+						md = this._check("max_depth", p),
+						vc = this._check("valid_children", p),
+						ch;
+					if(!js) { js = {}; }
+					if(vc === "none") { return false; } 
+					if($.isArray(vc)) {
+						if(!js.attr || !js.attr[s.type_attr]) { 
+							if(!js.attr) { js.attr = {}; }
+							js.attr[s.type_attr] = vc[0]; 
+						}
+						else {
+							if($.inArray(js.attr[s.type_attr], vc) === -1) { return false; }
+						}
+					}
+					if(s.max_children !== -2 && mc !== -1) {
+						ch = p === -1 ? this.get_container().children("> ul > li").length : p.children("> ul > li").length;
+						if(ch + 1 > mc) { return false; }
+					}
+					if(s.max_depth !== -2 && md !== -1 && (md - 1) < 0) { return false; }
+				}
+				return this.__call_old(true, obj, position, js, callback, is_loaded, skip_check);
+			}
+		}
+	});
+})(jQuery);
+//*/
+
+/* 
+ * jsTree HTML data 1.0
+ * The HTML data store. Datastores are build by replacing the `load_node` and `_is_loaded` functions.
+ */
+(function ($) {
+	$.jstree.plugin("html_data", {
+		__init : function () { 
+			// this used to use html() and clean the whitespace, but this way any attached data was lost
+			this.data.html_data.original_container_html = this.get_container().find(" > ul > li").clone(true);
+			// remove white space from LI node - otherwise nodes appear a bit to the right
+			this.data.html_data.original_container_html.find("li").andSelf().contents().filter(function() { return this.nodeType == 3; }).remove();
+		},
+		defaults : { 
+			data : false,
+			ajax : false,
+			correct_state : true
+		},
+		_fn : {
+			load_node : function (obj, s_call, e_call) { var _this = this; this.load_node_html(obj, function () { _this.__callback({ "obj" : obj }); s_call.call(this); }, e_call); },
+			_is_loaded : function (obj) { 
+				obj = this._get_node(obj); 
+				return obj == -1 || !obj || !this._get_settings().html_data.ajax || obj.is(".jstree-open, .jstree-leaf") || obj.children("ul").children("li").size() > 0;
+			},
+			load_node_html : function (obj, s_call, e_call) {
+				var d,
+					s = this.get_settings().html_data,
+					error_func = function () {},
+					success_func = function () {};
+				obj = this._get_node(obj);
+				if(obj && obj !== -1) {
+					if(obj.data("jstree-is-loading")) { return; }
+					else { obj.data("jstree-is-loading",true); }
+				}
+				switch(!0) {
+					case (!s.data && !s.ajax):
+						if(!obj || obj == -1) {
+							this.get_container()
+								.children("ul").empty()
+								.append(this.data.html_data.original_container_html)
+								.find("li, a").filter(function () { return this.firstChild.tagName !== "INS"; }).prepend("<ins class='jstree-icon'>&#160;</ins>").end()
+								.filter("a").children("ins:first-child").not(".jstree-icon").addClass("jstree-icon");
+							this.clean_node();
+						}
+						if(s_call) { s_call.call(this); }
+						break;
+					case (!!s.data && !s.ajax) || (!!s.data && !!s.ajax && (!obj || obj === -1)):
+						if(!obj || obj == -1) {
+							d = $(s.data);
+							if(!d.is("ul")) { d = $("<ul>").append(d); }
+							this.get_container()
+								.children("ul").empty().append(d.children())
+								.find("li, a").filter(function () { return this.firstChild.tagName !== "INS"; }).prepend("<ins class='jstree-icon'>&#160;</ins>").end()
+								.filter("a").children("ins:first-child").not(".jstree-icon").addClass("jstree-icon");
+							this.clean_node();
+						}
+						if(s_call) { s_call.call(this); }
+						break;
+					case (!s.data && !!s.ajax) || (!!s.data && !!s.ajax && obj && obj !== -1):
+						obj = this._get_node(obj);
+						error_func = function (x, t, e) {
+							var ef = this.get_settings().html_data.ajax.error; 
+							if(ef) { ef.call(this, x, t, e); }
+							if(obj != -1 && obj.length) {
+								obj.children(".jstree-loading").removeClass("jstree-loading");
+								obj.data("jstree-is-loading",false);
+								if(t === "success" && s.correct_state) { obj.removeClass("jstree-open jstree-closed").addClass("jstree-leaf"); }
+							}
+							else {
+								if(t === "success" && s.correct_state) { this.get_container().children("ul").empty(); }
+							}
+							if(e_call) { e_call.call(this); }
+						};
+						success_func = function (d, t, x) {
+							var sf = this.get_settings().html_data.ajax.success; 
+							if(sf) { d = sf.call(this,d,t,x) || d; }
+							if(d == "") {
+								return error_func.call(this, x, t, "");
+							}
+							if(d) {
+								d = $(d);
+								if(!d.is("ul")) { d = $("<ul>").append(d); }
+								if(obj == -1 || !obj) { this.get_container().children("ul").empty().append(d.children()).find("li, a").filter(function () { return this.firstChild.tagName !== "INS"; }).prepend("<ins class='jstree-icon'>&#160;</ins>").end().filter("a").children("ins:first-child").not(".jstree-icon").addClass("jstree-icon"); }
+								else { obj.children(".jstree-loading").removeClass("jstree-loading"); obj.append(d).find("li, a").filter(function () { return this.firstChild.tagName !== "INS"; }).prepend("<ins class='jstree-icon'>&#160;</ins>").end().filter("a").children("ins:first-child").not(".jstree-icon").addClass("jstree-icon"); obj.data("jstree-is-loading",false); }
+								this.clean_node(obj);
+								if(s_call) { s_call.call(this); }
+							}
+							else {
+								if(obj && obj !== -1) {
+									obj.children(".jstree-loading").removeClass("jstree-loading");
+									obj.data("jstree-is-loading",false);
+									if(s.correct_state) { 
+										obj.removeClass("jstree-open jstree-closed").addClass("jstree-leaf"); 
+										if(s_call) { s_call.call(this); } 
+									}
+								}
+								else {
+									if(s.correct_state) { 
+										this.get_container().children("ul").empty();
+										if(s_call) { s_call.call(this); } 
+									}
+								}
+							}
+						};
+						s.ajax.context = this;
+						s.ajax.error = error_func;
+						s.ajax.success = success_func;
+						if(!s.ajax.dataType) { s.ajax.dataType = "html"; }
+						if($.isFunction(s.ajax.url)) { s.ajax.url = s.ajax.url.call(this, obj); }
+						if($.isFunction(s.ajax.data)) { s.ajax.data = s.ajax.data.call(this, obj); }
+						$.ajax(s.ajax);
+						break;
+				}
+			}
+		}
+	});
+	// include the HTML data plugin by default
+	$.jstree.defaults.plugins.push("html_data");
+})(jQuery);
+//*/
+
+/* 
+ * jsTree themeroller plugin 1.0
+ * Adds support for jQuery UI themes. Include this at the end of your plugins list, also make sure "themes" is not included.
+ */
+(function ($) {
+	$.jstree.plugin("themeroller", {
+		__init : function () {
+			var s = this._get_settings().themeroller;
+			this.get_container()
+				.addClass("ui-widget-content")
+				.delegate("a","mouseenter.jstree", function () {
+					$(this).addClass(s.item_h);
+				})
+				.delegate("a","mouseleave.jstree", function () {
+					$(this).removeClass(s.item_h);
+				})
+				.bind("open_node.jstree create_node.jstree", $.proxy(function (e, data) { 
+						this._themeroller(data.rslt.obj);
+					}, this))
+				.bind("loaded.jstree refresh.jstree", $.proxy(function (e) {
+						this._themeroller();
+					}, this))
+				.bind("close_node.jstree", $.proxy(function (e, data) {
+						data.rslt.obj.children("ins").removeClass(s.opened).addClass(s.closed);
+					}, this))
+				.bind("select_node.jstree", $.proxy(function (e, data) {
+						data.rslt.obj.children("a").addClass(s.item_a);
+					}, this))
+				.bind("deselect_node.jstree deselect_all.jstree", $.proxy(function (e, data) {
+						this.get_container()
+							.find("." + s.item_a).removeClass(s.item_a).end()
+							.find(".jstree-clicked").addClass(s.item_a);
+					}, this))
+				.bind("move_node.jstree", $.proxy(function (e, data) {
+						this._themeroller(data.rslt.o);
+					}, this));
+		},
+		__destroy : function () {
+			var s = this._get_settings().themeroller,
+				c = [ "ui-icon" ];
+			$.each(s, function (i, v) {
+				v = v.split(" ");
+				if(v.length) { c = c.concat(v); }
+			});
+			this.get_container()
+				.removeClass("ui-widget-content")
+				.find("." + c.join(", .")).removeClass(c.join(" "));
+		},
+		_fn : {
+			_themeroller : function (obj) {
+				var s = this._get_settings().themeroller;
+				obj = !obj || obj == -1 ? this.get_container() : this._get_node(obj).parent();
+				obj
+					.find("li.jstree-closed > ins.jstree-icon").removeClass(s.opened).addClass("ui-icon " + s.closed).end()
+					.find("li.jstree-open > ins.jstree-icon").removeClass(s.closed).addClass("ui-icon " + s.opened).end()
+					.find("a").addClass(s.item)
+						.children("ins.jstree-icon").addClass("ui-icon " + s.item_icon);
+			}
+		},
+		defaults : {
+			"opened" : "ui-icon-triangle-1-se",
+			"closed" : "ui-icon-triangle-1-e",
+			"item" : "ui-state-default",
+			"item_h" : "ui-state-hover",
+			"item_a" : "ui-state-active",
+			"item_icon" : "ui-icon-folder-collapsed"
+		}
+	});
+	$(function() {
+		var css_string = '.jstree .ui-icon { overflow:visible; } .jstree a { padding:0 2px; }';
+		$.vakata.css.add_sheet({ str : css_string });
+	});
+})(jQuery);
+//*/
+
+/* 
+ * jsTree unique plugin 1.0
+ * Forces different names amongst siblings (still a bit experimental)
+ * NOTE: does not check language versions (it will not be possible to have nodes with the same title, even in different languages)
+ */
+(function ($) {
+	$.jstree.plugin("unique", {
+		__init : function () {
+			this.get_container()
+				.bind("before.jstree", $.proxy(function (e, data) { 
+						var nms = [], res = true, p, t;
+						if(data.func == "move_node") {
+							// obj, ref, position, is_copy, is_prepared, skip_check
+							if(data.args[4] === true) {
+								if(data.args[0].o && data.args[0].o.length) {
+									data.args[0].o.children("a").each(function () { nms.push($(this).text().replace(/^\s+/g,"")); });
+									res = this._check_unique(nms, data.args[0].np.find("> ul > li").not(data.args[0].o));
+								}
+							}
+						}
+						if(data.func == "create_node") {
+							// obj, position, js, callback, is_loaded
+							if(data.args[4] || this._is_loaded(data.args[0])) {
+								p = this._get_node(data.args[0]);
+								if(data.args[1] && (data.args[1] === "before" || data.args[1] === "after")) {
+									p = this._get_parent(data.args[0]);
+									if(!p || p === -1) { p = this.get_container(); }
+								}
+								if(typeof data.args[2] === "string") { nms.push(data.args[2]); }
+								else if(!data.args[2] || !data.args[2].data) { nms.push(this._get_settings().core.strings.new_node); }
+								else { nms.push(data.args[2].data); }
+								res = this._check_unique(nms, p.find("> ul > li"));
+							}
+						}
+						if(data.func == "rename_node") {
+							// obj, val
+							nms.push(data.args[1]);
+							t = this._get_node(data.args[0]);
+							p = this._get_parent(t);
+							if(!p || p === -1) { p = this.get_container(); }
+							res = this._check_unique(nms, p.find("> ul > li").not(t));
+						}
+						if(!res) {
+							e.stopPropagation();
+							return false;
+						}
+					}, this));
+		},
+		_fn : { 
+			_check_unique : function (nms, p) {
+				var cnms = [];
+				p.children("a").each(function () { cnms.push($(this).text().replace(/^\s+/g,"")); });
+				if(!cnms.length || !nms.length) { return true; }
+				cnms = cnms.sort().join(",,").replace(/(,|^)([^,]+)(,,\2)+(,|$)/g,"$1$2$4").replace(/,,+/g,",").replace(/,$/,"").split(",");
+				if((cnms.length + nms.length) != cnms.concat(nms).sort().join(",,").replace(/(,|^)([^,]+)(,,\2)+(,|$)/g,"$1$2$4").replace(/,,+/g,",").replace(/,$/,"").split(",").length) {
+					return false;
+				}
+				return true;
+			},
+			check_move : function () {
+				if(!this.__call_old()) { return false; }
+				var p = this._get_move(), nms = [];
+				if(p.o && p.o.length) {
+					p.o.children("a").each(function () { nms.push($(this).text().replace(/^\s+/g,"")); });
+					return this._check_unique(nms, p.np.find("> ul > li").not(p.o));
+				}
+				return true;
+			}
+		}
+	});
+})(jQuery);
+//*/
 });
 
 require.addModuleClosure("underscore", function(require, exports, module) {
@@ -4993,12 +8409,13 @@ var cookie = require('cookie'),
 
 // ensure we are at the correct domain
 if (location.protocol != 'https:' || location.host != 's3.amazonaws.com') {
-	location.href = 'https://s3.amazonaws.com/' + location.host + location.pathname + (location.pathname.slice(0, 1) == '/' ? 'index.html' : '');
+	location.href = 'https://s3.amazonaws.com/' + location.host + location.pathname;
 	throw new Error('Cannot administer site from this location.');
 }
 
 
 data.bind('login', setup);
+screens.bind('open', openPage);
 
 
 if (!screens.at('login')) {
@@ -5024,6 +8441,12 @@ function setup() {
 			.get('collections').get('plugins').then(initPlugins);
 }
 
+function openPage(name, page) {
+	if (page.find('.sidebar').length) $('body').addClass('with-sidebar');
+	else $('body').removeClass('with-sidebar');
+	$('body').removeClass('loading');
+}
+
 
 function initPlugins(plugins) {
 	
@@ -5037,8 +8460,15 @@ function initPlugins(plugins) {
 
 function createCollection(key) {
 	var data;
+	var collection;
 	if (typeof localStorage !== 'undefined') data = localStorage.getItem(key) || undefined;
-	return new Collection(data, { url: 'api/' + key });
+	try {
+		collection = require(key)[key];
+		collection.refresh(data, {silent: true});
+	} catch(e) {
+		collection = new Collection(data, { url: 'api/' + key });
+	}
+	return collection;
 }
 });
 

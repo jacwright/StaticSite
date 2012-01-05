@@ -1,0 +1,30 @@
+body {
+	padding-top: 60px;
+}
+.module {
+	border: 1px solid #ddd;
+	-webkit-border-radius: 6px;
+	-moz-border-radius: 6px;
+	border-radius: 6px;
+}
+.module h3 {
+	padding: 12px;
+	font-size: 18px;
+	line-height: normal;
+	margin: 0;
+	border-bottom: 1px solid #ddd;
+}
+.page {
+	border-bottom: 1px solid #ddd;
+	padding: 9px 12px;
+	min-height: 36px;
+}
+.page:last-child {
+	border-bottom: none;
+}
+.page strong.title {
+	color: #404040;
+}
+.page a:hover strong.title {
+	color: #0069d6;
+}

@@ -58,7 +58,7 @@
 
  ***********************************************************************/
 
-var jsp = require("./parse-js"),
+var jsp = require("parse-js.js"),
     slice = jsp.slice,
     member = jsp.member,
     PRECEDENCE = jsp.PRECEDENCE,
@@ -1603,7 +1603,7 @@ exports.ast_mangle = ast_mangle;
 exports.ast_squeeze = ast_squeeze;
 exports.gen_code = gen_code;
 exports.ast_add_scope = ast_add_scope;
-exports.ast_squeeze_more = require("./squeeze-more").ast_squeeze_more;
+exports.ast_squeeze_more = require("squeeze-more.js").ast_squeeze_more;
 exports.set_logger = function(logger) { warn = logger };
 exports.make_string = make_string;
 exports.split_lines = split_lines;

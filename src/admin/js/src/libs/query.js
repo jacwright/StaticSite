@@ -13,6 +13,14 @@ function query(field) {
 	this._sorts = [];
 }
 
+function select(array) {
+	if ( !(this instanceof select) ) {
+		return new select(array);
+	}
+	query.call(this);
+	this.array = array;
+}
+
 
 (function() {
 	
@@ -166,6 +174,11 @@ function query(field) {
 			}
 			return this._oper(this._store(value));
 		},
+		search: function(words) {
+			words = RegExp.escape(words);
+			var exp = new RegExp('\\b' + words.split(/\s/).join('|\\b'));
+			return this.regex(exp);
+		},
 		type: function(value) {
 			if (typeof value == 'function') {
 				if (!this._expression) { // check the type of the main object
@@ -212,6 +225,20 @@ function query(field) {
 			return this;
 		}
 	};
+	
+	
+	select.prototype = Object.create(query, {
+		constructor: select,
+		
+		where: function(field) {
+			this._expression = new Expression(field);
+		},
+		
+		exec: function() {
+			return this.on(this.array);
+		}
+	});
+	
 	
 	
 	
@@ -296,4 +323,5 @@ function query(field) {
 
 if (typeof exports !== 'undefined') {
 	exports.query = query;
+	exports.select = select;
 }

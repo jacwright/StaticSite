@@ -2,37 +2,74 @@
 <html>
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-<title>Static Site Admin</title>
+<title>Example Site Admin</title>
+<script type="text/javascript">
+// if not logged in direct immediately to the login page, this page won't work anyway, why finish loading it?
+if (!sessionStorage || !localStorage || !(sessionStorage.getItem('creds') || localStorage.getItem('creds'))) {
+	if (typeof window.stop === 'function') window.stop();
+	document.execCommand('Stop'); // for IE
+	location.href = 'login.html';
+}
+</script>
+<link rel="stylesheet" href="css/bootstrap.min.css">
+<link rel="stylesheet" href="css/app.css">
 <link type="text/css" rel="stylesheet" href="https://ajax.googleapis.com/ajax/libs/jqueryui/1.8.10/themes/smoothness/jquery-ui.css" media="all">
-<link type="text/css" rel="stylesheet" href="css/admin.css" media="all">
-<link rel="icon" type="image/png" href="staticlogo.png">
+<!--<link type="text/css" rel="stylesheet" href="css/admin.css" media="all">-->
+<script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.5.1/jquery.js"></script>
+<script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.8.10/jquery-ui.js"></script>
+<script type="text/javascript" src="js/app.js"></script>
 </head>
-<body class="loading">
-<div id="header">
-	<div class="logo">
-		Example Site
-	</div>
-	<div class="utility">
-		<a href="#/logout">Sign out</a>
+<body>
+
+<div class="topbar">
+	<div class="topbar-inner">
+		<div class="container-fluid">
+			<a class="brand" href="#">Example Site</a>
+			<ul class="nav">
+				<li class="active"><a href="#">Home</a></li>
+				<li><a href="#about">About</a></li>
+				<li><a href="#contact">Contact</a></li>
+			</ul>
+			<p class="pull-right">Logged in as <a href="#">username</a> <a href="logout.html">Sign out!</a></p>
+		</div>
 	</div>
 </div>
-<div id="nav">
+
+<div class="container-fluid">
+	<div class="sidebar">
+		<div class="module">
+			<h3>Pages</h3>
+			<div class="page">
+				<header>
+					<a href="#">
+						<strong class="title">Example Site</strong>
+					</a>
+				</header>
+				<small>examplesite.com</small>
+			</div>
+			<div class="page">
+				<header>
+					<a href="#">
+						<strong class="title">About Us</strong>
+					</a>
+				</header>
+				<small>examplesite.com/about-us</small>
+			</div>
+			<div class="page">
+				
+			</div>
+		</div>
+	</div>
 	
-</div>
-<div id="screens">
-	
-</div>
-<div id="footer">
-	<div class="progress">
-		<span class="msg">Saving</span>
-	</div>
-	<div class="poweredby">
-		<span>Powered by</span> <a href="http://staticsite.org"><span>Static Site</span></a>
+	<div class="content">
+		
+
+		<footer>
+			<p><span>Powered by</span> <a href="http://staticsite.org"><span>Static Site</span></a></p>
+		</footer>
+		
 	</div>
 </div>
-<script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.5.1/jquery.min.js"></script>
-<script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.8.10/jquery-ui.min.js"></script>
-<script type="text/javascript" src="js/compiled/admin.js"></script>
-<script type="text/javascript" src="js/compiled/plugins.js"></script>
+
 </body>
 </html>
