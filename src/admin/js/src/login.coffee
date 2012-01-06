@@ -1,5 +1,9 @@
 data = require('./app/data')
 
+# ensure we are at the correct domain
+if location.protocol isnt 'https:' or location.host isnt 's3.amazonaws.com'
+	location.href = "https://s3.amazonaws.com/#{location.host}#{location.pathname}"
+	throw new Error('Cannot administer site from this location.')
 
 
 # view code

@@ -346,6 +346,11 @@ require.define("/login.coffee", function (require, module, exports, __dirname, _
 
   data = require('./app/data');
 
+  if (location.protocol !== 'https:' || location.host !== 's3.amazonaws.com') {
+    location.href = "https://s3.amazonaws.com/" + location.host + location.pathname;
+    throw new Error('Cannot administer site from this location.');
+  }
+
   $(function() {
     var siteurl;
     $('div.alert-message').hide();

@@ -8,7 +8,11 @@
 if (!sessionStorage || !localStorage || !(sessionStorage.getItem('creds') || localStorage.getItem('creds'))) {
 	if (typeof window.stop === 'function') window.stop();
 	document.execCommand('Stop'); // for IE
-	location.href = 'login.html';
+	// ensure we are at the correct domain
+	if (location.protocol !== 'https:' || location.host !== 's3.amazonaws.com')
+		location.href = 'https://s3.amazonaws.com/' + location.host + '/admin/login.html';
+	else
+		location.href = 'login.html';
 }
 </script>
 <link rel="stylesheet" href="css/bootstrap.min.css">
