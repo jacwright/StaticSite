@@ -89,28 +89,29 @@ var data = module.exports = _.extend(new EventEmitter, {
 		// TODO remove the creds until window.unload so that JS plugins won't have access to them
 		var creds = sessionStorage.getItem('creds') || localStorage.getItem('creds');
 		if (creds) {
-			s3.auth(creds.split(':'));
+			creds = creds.split(':');
+			console.log('this:', this);
+			this.username = creds.shift();
+			s3.auth(creds.shift(), creds.shift());
 			return true;
 		} else {
 			return false;
 		}
 	},
 	
-	login: function(username, password, remember, prehashed) {
+	login: function(username, password, remember) {
 		var deferred = new promises.Deferred();
-		if (!prehashed) {
-			username = sha1(username);
-			password = sha1(password);
-		}
+		var usernameSha = sha1(username);
+		var passwordSha = sha1(password);
 		
-		$.get('../api/auth/' + username).then(function(cypher) {
-			var values = aes.decrypt(cypher, password, 256).split(':');
+		$.get('../api/auth/' + usernameSha).then(function(cypher) {
+			var values = aes.decrypt(cypher, passwordSha, 256).split(':');
 			
-			if (values.length == 3 && values[0] == username) {
+			if (values.length === 3 && values[0] === usernameSha) {
 				s3.auth(values[1], values[2]);
-				var creds = values[1] + ':' + values[2];
+				var creds = username + ':' + values[1] + ':' + values[2];
 				bucket = s3.bucket(bucketName);
-				bucket.list('api/auth/' + username).then(function() {
+				bucket.list('api/auth/' + usernameSha).then(function() {
 					deferred.fulfill();
 					
 					sessionStorage.setItem('creds', creds);

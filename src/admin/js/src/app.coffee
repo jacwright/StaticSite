@@ -7,17 +7,13 @@ if location.protocol isnt 'https:' or location.host isnt 's3.amazonaws.com'
 
 
 
-setup() if data.auth() else location.href = 'login.html'
-
-
-
 setup = ->
-	
+	return
 	# create main app collections
 	col = data.collections
-#	col.pages = createCollection('pages')
-#	col.templates = createCollection('templates')
-#	col.content = createCollection('content')
+	col.pages = createCollection('pages')
+	col.templates = createCollection('templates')
+	col.content = createCollection('content')
 #	col.plugins = createCollection('plugins')
 	
 	# load the data
@@ -50,3 +46,7 @@ createCollection = (key) ->
 	return collection
 
 	
+	
+	
+	
+if data.auth() then setup() else location.href = 'login.html'
