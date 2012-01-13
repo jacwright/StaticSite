@@ -1,5 +1,14 @@
-Static Site is a content management system hosted on Amazon's S3 and administered from S3 through a Javascript client.
-It includes security and hopefully will provide many features other traditional content management systems provide.
+Client-side-only HTML5 content management system for S3
+===
+
+Static Site, or S2, is an HTML5 content management system hosted completely from Amazon S3.
+Websites are administered and pages are edited directly on S3 through a Javascript client.
+There is no server-side component other than your S3 bucket.
+
+S2 includes security and provides many features other traditional content management systems provide such as templates.
+[AES](http://en.wikipedia.org/wiki/Advanced_Encryption_Standard) is used to securely store your S3 key and secret so
+a memorable username and password may be used instead. Web pages are rendered in-memory using Javascript templating and
+stored to their rightful location in S3.
 
 **Still under development. Right now the most you can do is register your user account and later sign in.**
 
@@ -43,9 +52,10 @@ content-type appropriately, e.g. text/html, text/css, text/js):
 * error.html
 * admin/index.html
 * admin/css/admin.css
-* admin/js/admin.js
+* admin/js/app.js
+* admin/js/login.js
 * admin/login.html
-* admin/dashboard.html
+* admin/index.html
 
 You should be able to go to the url https://s3.amazonaws.com/mybucket/admin/index.html and be presented with the login
 page. Click Register and put in your info, then you'll be taken to the blank dashboard page. Later you can come here
