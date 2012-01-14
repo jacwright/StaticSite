@@ -15,8 +15,8 @@ var auth = module.exports = _.extend(new EventEmitter, {
 	
 	login: function(username, password, remember) {
 		var deferred = new promises.Deferred();
-		var usernameSha = sha1(username);
-		var passwordSha = sha1(password);
+		var usernameSha = sha1.hash(username);
+		var passwordSha = sha1.hash(password);
 		
 		$.get('../api/auth/' + usernameSha).then(function(cypher) {
 			var values = aes.decrypt(cypher, passwordSha, 256).split(':');
@@ -48,8 +48,8 @@ var auth = module.exports = _.extend(new EventEmitter, {
 	register: function(key, secret, username, password) {
 		s3.auth(key, secret);
 		bucket = s3.bucket(bucketName);
-		username = sha1(username);
-		password = sha1(password);
+		username = sha1.hash(username);
+		password = sha1.hash(password);
 		var cypher = aes.encrypt([username, key, secret].join(':'), password, 256);
 		
 		// if we can successfully put this file to the bucket then we have access and are logged in

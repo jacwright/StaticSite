@@ -3,7 +3,7 @@
 /*              single-byte character encoding (c) Chris Veness 2002-2011                         */
 /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  */
 
-var Utf8 = {};  // Utf8 namespace
+var Utf8 = exports;  // Utf8 namespace
 
 /**
  * Encode multi-byte Unicode string into utf-8 multiple single-byte characters 

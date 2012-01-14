@@ -169,7 +169,7 @@ Aes.rCon = [ [0x00, 0x00, 0x00, 0x00],
 /*   - see http://csrc.nist.gov/publications/nistpubs/800-38a/sp800-38a.pdf                       */
 /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  */
 
-Aes.Ctr = {};  // Aes.Ctr namespace: a subclass or extension of Aes
+Aes.Ctr = exports;  // Aes.Ctr namespace: a subclass or extension of Aes
 
 /** 
  * Encrypt a text using AES encryption in Counter mode of operation

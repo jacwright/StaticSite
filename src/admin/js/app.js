@@ -3282,13 +3282,27 @@ exports.string_hmac = str_hmac_sha1;
 
 });
 
+require.define("/view.coffee", function (require, module, exports, __dirname, __filename) {
+    (function() {
+  var data;
+
+  data = require('./app/data');
+
+  $(function() {
+    return $('div.topbar .username').text(data.username);
+  });
+
+}).call(this);
+
+});
+
 require.define("/libs/crypto/utf8.js", function (require, module, exports, __dirname, __filename) {
     /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  */
 /*  Utf8 class: encode / decode between multi-byte Unicode characters and UTF-8 multiple          */
 /*              single-byte character encoding (c) Chris Veness 2002-2011                         */
 /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  */
 
-var Utf8 = {};  // Utf8 namespace
+var Utf8 = exports;  // Utf8 namespace
 
 /**
  * Encode multi-byte Unicode string into utf-8 multiple single-byte characters 
@@ -3339,18 +3353,4 @@ Utf8.decode = function(strUtf) {
     );
   return strUni;
 };
-});
-
-require.define("/view.coffee", function (require, module, exports, __dirname, __filename) {
-    (function() {
-  var data;
-
-  data = require('./app/data');
-
-  $(function() {
-    return $('div.topbar .username').text(data.username);
-  });
-
-}).call(this);
-
 });

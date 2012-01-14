@@ -4,6 +4,7 @@
 /*         http://csrc.nist.gov/groups/ST/toolkit/examples.html                                   */
 /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  */
 
+var Utf8 = require('./utf8');
 var Sha1 = exports;  // Sha1 namespace
 
 /**
