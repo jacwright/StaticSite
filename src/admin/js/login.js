@@ -342,9 +342,9 @@ exports.extname = function(path) {
 
 require.define("/login.coffee", function (require, module, exports, __dirname, __filename) {
     (function() {
-  var data;
+  var auth;
 
-  data = require('./app/data');
+  auth = require('./app/auth');
 
   if (location.protocol !== 'https:' || location.host !== 's3.amazonaws.com') {
     location.href = "https://s3.amazonaws.com/" + location.host + location.pathname;
@@ -364,7 +364,7 @@ require.define("/login.coffee", function (require, module, exports, __dirname, _
       username = $('#username').val();
       password = $('#password').val();
       rememberme = $('#rememberme').attr('checked');
-      return data.login(username, password, rememberme).then(function() {
+      return auth.login(username, password, rememberme).then(function() {
         return location.href = './';
       }, function(err) {
         return $('#alerts').slideDown('fast').find('.msg').text(err.message);
@@ -386,10 +386,9 @@ require.define("/login.coffee", function (require, module, exports, __dirname, _
 
 });
 
-require.define("/app/data.js", function (require, module, exports, __dirname, __filename) {
-    var crypto = require('../libs/crypto'),
-	sha1 = crypto.sha1,
-	aes = crypto.aes,
+require.define("/app/auth.js", function (require, module, exports, __dirname, __filename) {
+    var sha1 = require('../libs/crypto/sha1'),
+	aes = require('../libs/crypto/aes'),
 	EventEmitter = require('events').EventEmitter,
 	promises = require('../libs/promises'),
 	_ = require('underscore'),
@@ -401,92 +400,7 @@ var bucket,
 	path = '/' + bucketName + '/admin/';
 
 
-var data = module.exports = _.extend(new EventEmitter, {
-	
-	collections: {},
-	
-	get: function(url) {
-		return bucket.get('api/' + url);
-	},
-	
-	put: function(url, data) {
-		return bucket.put('api/' + url, data);
-	},
-	
-	destory: function(url) {
-		return bucket.destory('api/' + url);
-	},
-	
-	refresh: function(options) {
-		var deferred = new promises.Deferred();
-		var promise = deferred.promise;
-		
-		bucket.list('api/').then(function(results) {
-			var urlExp = /^api\/(\w+)\/(\w+)$/;
-			var has = {};
-			
-			
-			results.contents.forEach(function(item) {
-				var match = item.key.match(urlExp);
-				if (!match) return;
-				var id = match[2];
-				var type = match[1];
-				if (!data.collections.hasOwnProperty(type)) return;
-				
-				var collection = data.collections[type];
-				if (!has[type]) has[type] = {};
-				
-				has[type][id] = true;
-				
-				// if we have it and it is up-to-date, don't load it.
-				if (collection.get(id) && collection.get(id).etag == item.etag) return;
-				
-				// queue up all the calls so that the final promise won't be done until all of these are.
-				promise = promise.then(bucket.get(item.key).then(function(data) {
-					data = JSON.parse(data);
-					data.id = id; // just in case it hadn't been set
-					if (collection.get(id)) {
-						collection.get(id).set(data, options).etag = item.etag;
-					} else {
-						collection.add(data, options).get(id).etag = item.etag;
-					}
-				}, function(error) {
-					console.error(error);
-				}));
-			});
-			
-			// remove deleted items
-			for (var type in has) {
-				var remove = [];
-				var ids = has[type];
-				var collection = data.collections[type];
-				collection.each(function(item) {
-					if (!ids[item.id]) remove.push(item);
-				});
-				collection.remove(remove, options);
-			}
-			
-		}, deferred.fail);
-		
-		// return the data object as the promise result from this call
-		return promise.then(function() {
-			return data;
-		});
-	},
-	
-	auth: function() {
-		// TODO remove the creds until window.unload so that JS plugins won't have access to them
-		var creds = sessionStorage.getItem('creds') || localStorage.getItem('creds');
-		if (creds) {
-			creds = creds.split(':');
-			console.log('this:', this);
-			this.username = creds.shift();
-			s3.auth(creds.shift(), creds.shift());
-			return true;
-		} else {
-			return false;
-		}
-	},
+var auth = module.exports = _.extend(new EventEmitter, {
 	
 	login: function(username, password, remember) {
 		var deferred = new promises.Deferred();
@@ -520,16 +434,6 @@ var data = module.exports = _.extend(new EventEmitter, {
 		return deferred.promise;
 	},
 	
-	logout: function() {
-		if (cookie.get('rememberme')) {
-			// remove their rememberme, but set the preference to remember
-			cookie.set('rememberme', 'true', thirtyDays(), path, true);
-		}
-		cookie.remove('session', path);
-		s3.auth(null, null);
-		data.trigger('logout');
-	},
-	
 	register: function(key, secret, username, password) {
 		s3.auth(key, secret);
 		bucket = s3.bucket(bucketName);
@@ -539,37 +443,142 @@ var data = module.exports = _.extend(new EventEmitter, {
 		
 		// if we can successfully put this file to the bucket then we have access and are logged in
 		return bucket.put('api/auth/' + username, cypher, { acl: 'public-read' });
-	},
-	
-	parseUrl: function(url, params) {
-		return this.addQueryParams(base + url, params);
-	},
-	
-	addQueryParams: function(url, params) {
-		var query = [];
-		
-		for (var i in params) {
-			if (!params.hasOwnProperty(i)) continue;
-			query.push(i + '=' + encodeURIComponent(params[i]));
-		}
-		
-		if (query.length) {
-			url += (url.indexOf('?') != -1 ? '&' : '?') + query.join('&');
-		}
-		return url;
 	}
-	
 });
 
 });
 
-require.define("/libs/crypto.js", function (require, module, exports, __dirname, __filename) {
+require.define("/libs/crypto/sha1.js", function (require, module, exports, __dirname, __filename) {
+    /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  */
+/*  SHA-1 implementation in JavaScript | (c) Chris Veness 2002-2010 | www.movable-type.co.uk      */
+/*   - see http://csrc.nist.gov/groups/ST/toolkit/secure_hashing.html                             */
+/*         http://csrc.nist.gov/groups/ST/toolkit/examples.html                                   */
+/* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  */
+
+var Sha1 = exports;  // Sha1 namespace
+
+/**
+ * Generates SHA-1 hash of string
+ *
+ * @param {String} msg                String to be hashed
+ * @param {Boolean} [utf8encode=true] Encode msg as UTF-8 before generating hash
+ * @returns {String}                  Hash of msg as hex character string
+ */
+Sha1.hash = function(msg, utf8encode) {
+  utf8encode =  (typeof utf8encode == 'undefined') ? true : utf8encode;
+  
+  // convert string to UTF-8, as SHA only deals with byte-streams
+  if (utf8encode) msg = Utf8.encode(msg);
+  
+  // constants [�4.2.1]
+  var K = [0x5a827999, 0x6ed9eba1, 0x8f1bbcdc, 0xca62c1d6];
+  
+  // PREPROCESSING 
+  
+  msg += String.fromCharCode(0x80);  // add trailing '1' bit (+ 0's padding) to string [�5.1.1]
+  
+  // convert string msg into 512-bit/16-integer blocks arrays of ints [�5.2.1]
+  var l = msg.length/4 + 2;  // length (in 32-bit integers) of msg + �1� + appended length
+  var N = Math.ceil(l/16);   // number of 16-integer-blocks required to hold 'l' ints
+  var M = new Array(N);
+  
+  for (var i=0; i<N; i++) {
+    M[i] = new Array(16);
+    for (var j=0; j<16; j++) {  // encode 4 chars per integer, big-endian encoding
+      M[i][j] = (msg.charCodeAt(i*64+j*4)<<24) | (msg.charCodeAt(i*64+j*4+1)<<16) | 
+        (msg.charCodeAt(i*64+j*4+2)<<8) | (msg.charCodeAt(i*64+j*4+3));
+    } // note running off the end of msg is ok 'cos bitwise ops on NaN return 0
+  }
+  // add length (in bits) into final pair of 32-bit integers (big-endian) [�5.1.1]
+  // note: most significant word would be (len-1)*8 >>> 32, but since JS converts
+  // bitwise-op args to 32 bits, we need to simulate this by arithmetic operators
+  M[N-1][14] = ((msg.length-1)*8) / Math.pow(2, 32); M[N-1][14] = Math.floor(M[N-1][14])
+  M[N-1][15] = ((msg.length-1)*8) & 0xffffffff;
+  
+  // set initial hash value [�5.3.1]
+  var H0 = 0x67452301;
+  var H1 = 0xefcdab89;
+  var H2 = 0x98badcfe;
+  var H3 = 0x10325476;
+  var H4 = 0xc3d2e1f0;
+  
+  // HASH COMPUTATION [�6.1.2]
+  
+  var W = new Array(80); var a, b, c, d, e;
+  for (var i=0; i<N; i++) {
+  
+    // 1 - prepare message schedule 'W'
+    for (var t=0;  t<16; t++) W[t] = M[i][t];
+    for (var t=16; t<80; t++) W[t] = Sha1.ROTL(W[t-3] ^ W[t-8] ^ W[t-14] ^ W[t-16], 1);
+    
+    // 2 - initialise five working variables a, b, c, d, e with previous hash value
+    a = H0; b = H1; c = H2; d = H3; e = H4;
+    
+    // 3 - main loop
+    for (var t=0; t<80; t++) {
+      var s = Math.floor(t/20); // seq for blocks of 'f' functions and 'K' constants
+      var T = (Sha1.ROTL(a,5) + Sha1.f(s,b,c,d) + e + K[s] + W[t]) & 0xffffffff;
+      e = d;
+      d = c;
+      c = Sha1.ROTL(b, 30);
+      b = a;
+      a = T;
+    }
+    
+    // 4 - compute the new intermediate hash value
+    H0 = (H0+a) & 0xffffffff;  // note 'addition modulo 2^32'
+    H1 = (H1+b) & 0xffffffff; 
+    H2 = (H2+c) & 0xffffffff; 
+    H3 = (H3+d) & 0xffffffff; 
+    H4 = (H4+e) & 0xffffffff;
+  }
+
+  return Sha1.toHexStr(H0) + Sha1.toHexStr(H1) + 
+    Sha1.toHexStr(H2) + Sha1.toHexStr(H3) + Sha1.toHexStr(H4);
+};
+
+//
+// function 'f' [�4.1.1]
+//
+Sha1.f = function(s, x, y, z)  {
+  switch (s) {
+  case 0: return (x & y) ^ (~x & z);           // Ch()
+  case 1: return x ^ y ^ z;                    // Parity()
+  case 2: return (x & y) ^ (x & z) ^ (y & z);  // Maj()
+  case 3: return x ^ y ^ z;                    // Parity()
+  }
+};
+
+//
+// rotate left (circular left shift) value x by n positions [�3.2.5]
+//
+Sha1.ROTL = function(x, n) {
+  return (x<<n) | (x>>>(32-n));
+};
+
+//
+// hexadecimal representation of a number 
+//   (note toString(16) is implementation-dependant, and  
+//   in IE returns signed numbers when used on full words)
+//
+Sha1.toHexStr = function(n) {
+  var s="", v;
+  for (var i=7; i>=0; i--) { v = (n>>>(i*4)) & 0xf; s += v.toString(16); }
+  return s;
+};
+
+});
+
+require.define("/libs/crypto/aes.js", function (require, module, exports, __dirname, __filename) {
     /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  */
 /*  AES implementation in JavaScript (c) Chris Veness 2005-2011                                   */
 /*   - see http://csrc.nist.gov/publications/PubsFIPS.html#197                                    */
+/*   - see http://www.movable-type.co.uk/scripts/aes.html                                         */
 /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  */
 
-var Aes = {};  // Aes namespace
+var Base64 = require('./base64');
+var Utf8 = require('./utf8');
+var Aes = exports;  // Aes namespace
 
 /**
  * AES Cipher function: encrypt 'input' state with Rijndael algorithm
@@ -875,131 +884,15 @@ Aes.Ctr.decrypt = function(ciphertext, password, nBits) {
   //alert((new Date()) - t);
   return plaintext;
 };
+});
 
-/* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  */
-/*  SHA-1 implementation in JavaScript | (c) Chris Veness 2002-2010 | www.movable-type.co.uk      */
-/*   - see http://csrc.nist.gov/groups/ST/toolkit/secure_hashing.html                             */
-/*         http://csrc.nist.gov/groups/ST/toolkit/examples.html                                   */
-/* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  */
-
-var Sha1 = {};  // Sha1 namespace
-
-/**
- * Generates SHA-1 hash of string
- *
- * @param {String} msg                String to be hashed
- * @param {Boolean} [utf8encode=true] Encode msg as UTF-8 before generating hash
- * @returns {String}                  Hash of msg as hex character string
- */
-Sha1.hash = function(msg, utf8encode) {
-  utf8encode =  (typeof utf8encode == 'undefined') ? true : utf8encode;
-  
-  // convert string to UTF-8, as SHA only deals with byte-streams
-  if (utf8encode) msg = Utf8.encode(msg);
-  
-  // constants [�4.2.1]
-  var K = [0x5a827999, 0x6ed9eba1, 0x8f1bbcdc, 0xca62c1d6];
-  
-  // PREPROCESSING 
-  
-  msg += String.fromCharCode(0x80);  // add trailing '1' bit (+ 0's padding) to string [�5.1.1]
-  
-  // convert string msg into 512-bit/16-integer blocks arrays of ints [�5.2.1]
-  var l = msg.length/4 + 2;  // length (in 32-bit integers) of msg + �1� + appended length
-  var N = Math.ceil(l/16);   // number of 16-integer-blocks required to hold 'l' ints
-  var M = new Array(N);
-  
-  for (var i=0; i<N; i++) {
-    M[i] = new Array(16);
-    for (var j=0; j<16; j++) {  // encode 4 chars per integer, big-endian encoding
-      M[i][j] = (msg.charCodeAt(i*64+j*4)<<24) | (msg.charCodeAt(i*64+j*4+1)<<16) | 
-        (msg.charCodeAt(i*64+j*4+2)<<8) | (msg.charCodeAt(i*64+j*4+3));
-    } // note running off the end of msg is ok 'cos bitwise ops on NaN return 0
-  }
-  // add length (in bits) into final pair of 32-bit integers (big-endian) [�5.1.1]
-  // note: most significant word would be (len-1)*8 >>> 32, but since JS converts
-  // bitwise-op args to 32 bits, we need to simulate this by arithmetic operators
-  M[N-1][14] = ((msg.length-1)*8) / Math.pow(2, 32); M[N-1][14] = Math.floor(M[N-1][14])
-  M[N-1][15] = ((msg.length-1)*8) & 0xffffffff;
-  
-  // set initial hash value [�5.3.1]
-  var H0 = 0x67452301;
-  var H1 = 0xefcdab89;
-  var H2 = 0x98badcfe;
-  var H3 = 0x10325476;
-  var H4 = 0xc3d2e1f0;
-  
-  // HASH COMPUTATION [�6.1.2]
-  
-  var W = new Array(80); var a, b, c, d, e;
-  for (var i=0; i<N; i++) {
-  
-    // 1 - prepare message schedule 'W'
-    for (var t=0;  t<16; t++) W[t] = M[i][t];
-    for (var t=16; t<80; t++) W[t] = Sha1.ROTL(W[t-3] ^ W[t-8] ^ W[t-14] ^ W[t-16], 1);
-    
-    // 2 - initialise five working variables a, b, c, d, e with previous hash value
-    a = H0; b = H1; c = H2; d = H3; e = H4;
-    
-    // 3 - main loop
-    for (var t=0; t<80; t++) {
-      var s = Math.floor(t/20); // seq for blocks of 'f' functions and 'K' constants
-      var T = (Sha1.ROTL(a,5) + Sha1.f(s,b,c,d) + e + K[s] + W[t]) & 0xffffffff;
-      e = d;
-      d = c;
-      c = Sha1.ROTL(b, 30);
-      b = a;
-      a = T;
-    }
-    
-    // 4 - compute the new intermediate hash value
-    H0 = (H0+a) & 0xffffffff;  // note 'addition modulo 2^32'
-    H1 = (H1+b) & 0xffffffff; 
-    H2 = (H2+c) & 0xffffffff; 
-    H3 = (H3+d) & 0xffffffff; 
-    H4 = (H4+e) & 0xffffffff;
-  }
-
-  return Sha1.toHexStr(H0) + Sha1.toHexStr(H1) + 
-    Sha1.toHexStr(H2) + Sha1.toHexStr(H3) + Sha1.toHexStr(H4);
-};
-
-//
-// function 'f' [�4.1.1]
-//
-Sha1.f = function(s, x, y, z)  {
-  switch (s) {
-  case 0: return (x & y) ^ (~x & z);           // Ch()
-  case 1: return x ^ y ^ z;                    // Parity()
-  case 2: return (x & y) ^ (x & z) ^ (y & z);  // Maj()
-  case 3: return x ^ y ^ z;                    // Parity()
-  }
-};
-
-//
-// rotate left (circular left shift) value x by n positions [�3.2.5]
-//
-Sha1.ROTL = function(x, n) {
-  return (x<<n) | (x>>>(32-n));
-};
-
-//
-// hexadecimal representation of a number 
-//   (note toString(16) is implementation-dependant, and  
-//   in IE returns signed numbers when used on full words)
-//
-Sha1.toHexStr = function(n) {
-  var s="", v;
-  for (var i=7; i>=0; i--) { v = (n>>>(i*4)) & 0xf; s += v.toString(16); }
-  return s;
-};
-
-/* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  */
+require.define("/libs/crypto/base64.js", function (require, module, exports, __dirname, __filename) {
+    /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  */
 /*  Base64 class: Base 64 encoding / decoding (c) Chris Veness 2002-2011                          */
 /*    note: depends on Utf8 class                                                                 */
 /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  */
 
-var Base64 = {};  // Base64 namespace
+var Base64 = exports;  // Base64 namespace
 
 Base64.code = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
 
@@ -1085,8 +978,10 @@ Base64.decode = function(str, utf8decode) {
   return utf8decode ? plain.decodeUTF8() : plain; 
 };
 
+});
 
-/* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  */
+require.define("/libs/crypto/utf8.js", function (require, module, exports, __dirname, __filename) {
+    /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  */
 /*  Utf8 class: encode / decode between multi-byte Unicode characters and UTF-8 multiple          */
 /*              single-byte character encoding (c) Chris Veness 2002-2011                         */
 /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  */
@@ -1142,425 +1037,6 @@ Utf8.decode = function(strUtf) {
     );
   return strUni;
 };
-
-/* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  */
-
-
-
-/*
- * A JavaScript implementation of the Secure Hash Algorithm, SHA-1, as defined
- * in FIPS PUB 180-1
- * Version 2.1a Copyright Paul Johnston 2000 - 2002.
- * Other contributors: Greg Holt, Andrew Kepert, Ydnar, Lostinet
- * Distributed under the BSD License
- * See http://pajhome.org.uk/crypt/md5 for details.
- */
-
-/*
- * Configurable variables. You may need to tweak these to be compatible with
- * the server-side, but the defaults work in most cases.
- */
-var hexcase = 0;  /* hex output format. 0 - lowercase; 1 - uppercase        */
-var b64pad  = "="; /* base-64 pad character. "=" for strict RFC compliance   */
-var chrsz   = 8;  /* bits per input character. 8 - ASCII; 16 - Unicode      */
-
-/*
- * These are the functions you'll usually want to call
- * They take string arguments and return either hex or base-64 encoded strings
- */
-function hex_sha1(s){return binb2hex(core_sha1(str2binb(s),s.length * chrsz));}
-function b64_sha1(s){return binb2b64(core_sha1(str2binb(s),s.length * chrsz));}
-function str_sha1(s){return binb2str(core_sha1(str2binb(s),s.length * chrsz));}
-function hex_hmac_sha1(key, data){ return binb2hex(core_hmac_sha1(key, data));}
-function b64_hmac_sha1(key, data){ return binb2b64(core_hmac_sha1(key, data));}
-function str_hmac_sha1(key, data){ return binb2str(core_hmac_sha1(key, data));}
-
-/*
- * Perform a simple self-test to see if the VM is working
- */
-function sha1_vm_test()
-{
-  return hex_sha1("abc") == "a9993e364706816aba3e25717850c26c9cd0d89d";
-}
-
-/*
- * Calculate the SHA-1 of an array of big-endian words, and a bit length
- */
-function core_sha1(x, len)
-{
-  /* append padding */
-  x[len >> 5] |= 0x80 << (24 - len % 32);
-  x[((len + 64 >> 9) << 4) + 15] = len;
-
-  var w = Array(80);
-  var a =  1732584193;
-  var b = -271733879;
-  var c = -1732584194;
-  var d =  271733878;
-  var e = -1009589776;
-
-  for(var i = 0; i < x.length; i += 16)
-  {
-    var olda = a;
-    var oldb = b;
-    var oldc = c;
-    var oldd = d;
-    var olde = e;
-
-    for(var j = 0; j < 80; j++)
-    {
-      if(j < 16) w[j] = x[i + j];
-      else w[j] = rol(w[j-3] ^ w[j-8] ^ w[j-14] ^ w[j-16], 1);
-      var t = safe_add(safe_add(rol(a, 5), sha1_ft(j, b, c, d)),
-                       safe_add(safe_add(e, w[j]), sha1_kt(j)));
-      e = d;
-      d = c;
-      c = rol(b, 30);
-      b = a;
-      a = t;
-    }
-
-    a = safe_add(a, olda);
-    b = safe_add(b, oldb);
-    c = safe_add(c, oldc);
-    d = safe_add(d, oldd);
-    e = safe_add(e, olde);
-  }
-  return Array(a, b, c, d, e);
-
-}
-
-/*
- * Perform the appropriate triplet combination function for the current
- * iteration
- */
-function sha1_ft(t, b, c, d)
-{
-  if(t < 20) return (b & c) | ((~b) & d);
-  if(t < 40) return b ^ c ^ d;
-  if(t < 60) return (b & c) | (b & d) | (c & d);
-  return b ^ c ^ d;
-}
-
-/*
- * Determine the appropriate additive constant for the current iteration
- */
-function sha1_kt(t)
-{
-  return (t < 20) ?  1518500249 : (t < 40) ?  1859775393 :
-         (t < 60) ? -1894007588 : -899497514;
-}
-
-/*
- * Calculate the HMAC-SHA1 of a key and some data
- */
-function core_hmac_sha1(key, data)
-{
-  var bkey = str2binb(key);
-  if(bkey.length > 16) bkey = core_sha1(bkey, key.length * chrsz);
-
-  var ipad = Array(16), opad = Array(16);
-  for(var i = 0; i < 16; i++)
-  {
-    ipad[i] = bkey[i] ^ 0x36363636;
-    opad[i] = bkey[i] ^ 0x5C5C5C5C;
-  }
-
-  var hash = core_sha1(ipad.concat(str2binb(data)), 512 + data.length * chrsz);
-  return core_sha1(opad.concat(hash), 512 + 160);
-}
-
-/*
- * Add integers, wrapping at 2^32. This uses 16-bit operations internally
- * to work around bugs in some JS interpreters.
- */
-function safe_add(x, y)
-{
-  var lsw = (x & 0xFFFF) + (y & 0xFFFF);
-  var msw = (x >> 16) + (y >> 16) + (lsw >> 16);
-  return (msw << 16) | (lsw & 0xFFFF);
-}
-
-/*
- * Bitwise rotate a 32-bit number to the left.
- */
-function rol(num, cnt)
-{
-  return (num << cnt) | (num >>> (32 - cnt));
-}
-
-/*
- * Convert an 8-bit or 16-bit string to an array of big-endian words
- * In 8-bit function, characters >255 have their hi-byte silently ignored.
- */
-function str2binb(str)
-{
-  var bin = Array();
-  var mask = (1 << chrsz) - 1;
-  for(var i = 0; i < str.length * chrsz; i += chrsz)
-    bin[i>>5] |= (str.charCodeAt(i / chrsz) & mask) << (32 - chrsz - i%32);
-  return bin;
-}
-
-/*
- * Convert an array of big-endian words to a string
- */
-function binb2str(bin)
-{
-  var str = "";
-  var mask = (1 << chrsz) - 1;
-  for(var i = 0; i < bin.length * 32; i += chrsz)
-    str += String.fromCharCode((bin[i>>5] >>> (32 - chrsz - i%32)) & mask);
-  return str;
-}
-
-/*
- * Convert an array of big-endian words to a hex string.
- */
-function binb2hex(binarray)
-{
-  var hex_tab = hexcase ? "0123456789ABCDEF" : "0123456789abcdef";
-  var str = "";
-  for(var i = 0; i < binarray.length * 4; i++)
-  {
-    str += hex_tab.charAt((binarray[i>>2] >> ((3 - i%4)*8+4)) & 0xF) +
-           hex_tab.charAt((binarray[i>>2] >> ((3 - i%4)*8  )) & 0xF);
-  }
-  return str;
-}
-
-/*
- * Convert an array of big-endian words to a base-64 string
- */
-function binb2b64(binarray)
-{
-  var tab = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-  var str = "";
-  for(var i = 0; i < binarray.length * 4; i += 3)
-  {
-    var triplet = (((binarray[i   >> 2] >> 8 * (3 -  i   %4)) & 0xFF) << 16)
-                | (((binarray[i+1 >> 2] >> 8 * (3 - (i+1)%4)) & 0xFF) << 8 )
-                |  ((binarray[i+2 >> 2] >> 8 * (3 - (i+2)%4)) & 0xFF);
-    for(var j = 0; j < 4; j++)
-    {
-      if(i * 8 + j * 6 > binarray.length * 32) str += b64pad;
-      else str += tab.charAt((triplet >> 6*(3-j)) & 0x3F);
-    }
-  }
-  return str;
-}
-
-/* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  */
-
-
-/*
- * A JavaScript implementation of the RSA Data Security, Inc. MD5 Message
- * Digest Algorithm, as defined in RFC 1321.
- * Copyright (C) Paul Johnston 1999 - 2000.
- * Updated by Greg Holt 2000 - 2001.
- * See http://pajhome.org.uk/site/legal.html for details.
- */
-
-/*
- * Convert a 32-bit number to a hex string with ls-byte first
- */
-var hex_chr = "0123456789abcdef";
-function rhex(num)
-{
-  str = "";
-  for(j = 0; j <= 3; j++)
-    str += hex_chr.charAt((num >> (j * 8 + 4)) & 0x0F) +
-           hex_chr.charAt((num >> (j * 8)) & 0x0F);
-  return str;
-}
-
-/*
- * Convert a string to a sequence of 16-word blocks, stored as an array.
- * Append padding bits and the length, as described in the MD5 standard.
- */
-function str2blks_MD5(str)
-{
-  nblk = ((str.length + 8) >> 6) + 1;
-  blks = new Array(nblk * 16);
-  for(i = 0; i < nblk * 16; i++) blks[i] = 0;
-  for(i = 0; i < str.length; i++)
-    blks[i >> 2] |= str.charCodeAt(i) << ((i % 4) * 8);
-  blks[i >> 2] |= 0x80 << ((i % 4) * 8);
-  blks[nblk * 16 - 2] = str.length * 8;
-  return blks;
-}
-
-/*
- * Add integers, wrapping at 2^32. This uses 16-bit operations internally 
- * to work around bugs in some JS interpreters.
- */
-function add(x, y)
-{
-  var lsw = (x & 0xFFFF) + (y & 0xFFFF);
-  var msw = (x >> 16) + (y >> 16) + (lsw >> 16);
-  return (msw << 16) | (lsw & 0xFFFF);
-}
-
-/*
- * Bitwise rotate a 32-bit number to the left
- */
-function rol(num, cnt)
-{
-  return (num << cnt) | (num >>> (32 - cnt));
-}
-
-/*
- * These functions implement the basic operation for each round of the
- * algorithm.
- */
-function cmn(q, a, b, x, s, t)
-{
-  return add(rol(add(add(a, q), add(x, t)), s), b);
-}
-function ff(a, b, c, d, x, s, t)
-{
-  return cmn((b & c) | ((~b) & d), a, b, x, s, t);
-}
-function gg(a, b, c, d, x, s, t)
-{
-  return cmn((b & d) | (c & (~d)), a, b, x, s, t);
-}
-function hh(a, b, c, d, x, s, t)
-{
-  return cmn(b ^ c ^ d, a, b, x, s, t);
-}
-function ii(a, b, c, d, x, s, t)
-{
-  return cmn(c ^ (b | (~d)), a, b, x, s, t);
-}
-
-/*
- * Take a string and return the hex representation of its MD5.
- */
-function calcMD5(str)
-{
-  x = str2blks_MD5(str);
-  a =  1732584193;
-  b = -271733879;
-  c = -1732584194;
-  d =  271733878;
-
-  for(i = 0; i < x.length; i += 16)
-  {
-    olda = a;
-    oldb = b;
-    oldc = c;
-    oldd = d;
-
-    a = ff(a, b, c, d, x[i+ 0], 7 , -680876936);
-    d = ff(d, a, b, c, x[i+ 1], 12, -389564586);
-    c = ff(c, d, a, b, x[i+ 2], 17,  606105819);
-    b = ff(b, c, d, a, x[i+ 3], 22, -1044525330);
-    a = ff(a, b, c, d, x[i+ 4], 7 , -176418897);
-    d = ff(d, a, b, c, x[i+ 5], 12,  1200080426);
-    c = ff(c, d, a, b, x[i+ 6], 17, -1473231341);
-    b = ff(b, c, d, a, x[i+ 7], 22, -45705983);
-    a = ff(a, b, c, d, x[i+ 8], 7 ,  1770035416);
-    d = ff(d, a, b, c, x[i+ 9], 12, -1958414417);
-    c = ff(c, d, a, b, x[i+10], 17, -42063);
-    b = ff(b, c, d, a, x[i+11], 22, -1990404162);
-    a = ff(a, b, c, d, x[i+12], 7 ,  1804603682);
-    d = ff(d, a, b, c, x[i+13], 12, -40341101);
-    c = ff(c, d, a, b, x[i+14], 17, -1502002290);
-    b = ff(b, c, d, a, x[i+15], 22,  1236535329);    
-
-    a = gg(a, b, c, d, x[i+ 1], 5 , -165796510);
-    d = gg(d, a, b, c, x[i+ 6], 9 , -1069501632);
-    c = gg(c, d, a, b, x[i+11], 14,  643717713);
-    b = gg(b, c, d, a, x[i+ 0], 20, -373897302);
-    a = gg(a, b, c, d, x[i+ 5], 5 , -701558691);
-    d = gg(d, a, b, c, x[i+10], 9 ,  38016083);
-    c = gg(c, d, a, b, x[i+15], 14, -660478335);
-    b = gg(b, c, d, a, x[i+ 4], 20, -405537848);
-    a = gg(a, b, c, d, x[i+ 9], 5 ,  568446438);
-    d = gg(d, a, b, c, x[i+14], 9 , -1019803690);
-    c = gg(c, d, a, b, x[i+ 3], 14, -187363961);
-    b = gg(b, c, d, a, x[i+ 8], 20,  1163531501);
-    a = gg(a, b, c, d, x[i+13], 5 , -1444681467);
-    d = gg(d, a, b, c, x[i+ 2], 9 , -51403784);
-    c = gg(c, d, a, b, x[i+ 7], 14,  1735328473);
-    b = gg(b, c, d, a, x[i+12], 20, -1926607734);
-    
-    a = hh(a, b, c, d, x[i+ 5], 4 , -378558);
-    d = hh(d, a, b, c, x[i+ 8], 11, -2022574463);
-    c = hh(c, d, a, b, x[i+11], 16,  1839030562);
-    b = hh(b, c, d, a, x[i+14], 23, -35309556);
-    a = hh(a, b, c, d, x[i+ 1], 4 , -1530992060);
-    d = hh(d, a, b, c, x[i+ 4], 11,  1272893353);
-    c = hh(c, d, a, b, x[i+ 7], 16, -155497632);
-    b = hh(b, c, d, a, x[i+10], 23, -1094730640);
-    a = hh(a, b, c, d, x[i+13], 4 ,  681279174);
-    d = hh(d, a, b, c, x[i+ 0], 11, -358537222);
-    c = hh(c, d, a, b, x[i+ 3], 16, -722521979);
-    b = hh(b, c, d, a, x[i+ 6], 23,  76029189);
-    a = hh(a, b, c, d, x[i+ 9], 4 , -640364487);
-    d = hh(d, a, b, c, x[i+12], 11, -421815835);
-    c = hh(c, d, a, b, x[i+15], 16,  530742520);
-    b = hh(b, c, d, a, x[i+ 2], 23, -995338651);
-
-    a = ii(a, b, c, d, x[i+ 0], 6 , -198630844);
-    d = ii(d, a, b, c, x[i+ 7], 10,  1126891415);
-    c = ii(c, d, a, b, x[i+14], 15, -1416354905);
-    b = ii(b, c, d, a, x[i+ 5], 21, -57434055);
-    a = ii(a, b, c, d, x[i+12], 6 ,  1700485571);
-    d = ii(d, a, b, c, x[i+ 3], 10, -1894986606);
-    c = ii(c, d, a, b, x[i+10], 15, -1051523);
-    b = ii(b, c, d, a, x[i+ 1], 21, -2054922799);
-    a = ii(a, b, c, d, x[i+ 8], 6 ,  1873313359);
-    d = ii(d, a, b, c, x[i+15], 10, -30611744);
-    c = ii(c, d, a, b, x[i+ 6], 15, -1560198380);
-    b = ii(b, c, d, a, x[i+13], 21,  1309151649);
-    a = ii(a, b, c, d, x[i+ 4], 6 , -145523070);
-    d = ii(d, a, b, c, x[i+11], 10, -1120210379);
-    c = ii(c, d, a, b, x[i+ 2], 15,  718787259);
-    b = ii(b, c, d, a, x[i+ 9], 21, -343485551);
-
-    a = add(a, olda);
-    b = add(b, oldb);
-    c = add(c, oldc);
-    d = add(d, oldd);
-  }
-  return rhex(a) + rhex(b) + rhex(c) + rhex(d);
-}
- 
-function b64_md5_digest(str) {
-	str = calcMD5(str);
-	var digest = '';
-	for (var i = 0; i < 32; i+= 2) {
-		digest += String.fromCharCode(parseInt(str.slice(i, i + 2), 16));
-	}
-	return Base64.encode(digest);
-}
-
-
-function uuid() {
-	return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-		var r = Math.random()*16|0, v = c == 'x' ? r : (r&0x3|0x8);
-		return v.toString(16);
-	});
-}
-
-
-if (typeof exports !== 'undefined') {
-	exports.aes = Aes.Ctr;
-	exports.sha1 = Sha1.hash;
-	exports.base64 = Base64;
-	exports.utf8 = Utf8;
-	exports.hex_sha1 = hex_sha1;
-	exports.b64_sha1 = b64_sha1;
-	exports.str_sha1 = str_sha1;
-	exports.hex_hmac_sha1 = hex_hmac_sha1;
-	exports.b64_hmac_sha1 = b64_hmac_sha1;
-	exports.str_hmac_sha1 = str_hmac_sha1;
-	exports.md5 = calcMD5;
-	exports.b64_md5_digest = b64_md5_digest;
-	exports.uuid = uuid;
-}
 });
 
 require.define("events", function (require, module, exports, __dirname, __filename) {
@@ -3088,11 +2564,10 @@ require.define("/node_modules/underscore/underscore.js", function (require, modu
 });
 
 require.define("/libs/s3.js", function (require, module, exports, __dirname, __filename) {
-    var crypto = require('./crypto'),
-	date = require('./date'),
-	b64_md5_digest = crypto.b64_md5_digest,
-	utf8 = crypto.utf8,
-	b64_hmac_sha1 = crypto.b64_hmac_sha1,
+    var date = require('./date'),
+	md5 = require('./crypto/md5'),
+	sha1 = require('./crypto/shautils'),
+	utf8 = require('./crypto/utf8'),
 	promises = require('./promises'),
 	_ = require('underscore')._;
 
@@ -3148,7 +2623,7 @@ var s3 = exports.s3 = {
 				contentType = headers['Content-Type'] || mimeTypes[ext] || 'application/octet-stream';
 			}
 			headers['Content-Type'] = contentType;
-			contentMD5 = headers['Content-MD5'] = b64_md5_digest(data); // needs to be base64 md5-digest
+			contentMD5 = headers['Content-MD5'] = md5.base64(data); // needs to be base64 md5-digest
 		}
 		
 		headers['x-amz-date'] = date;
@@ -3182,7 +2657,7 @@ var s3 = exports.s3 = {
 				amzString + resource
 			].join('\n');
 			
-			var signature = b64_hmac_sha1(secret, utf8.encode(stringToSign));
+			var signature = sha1.base64_hmac(secret, utf8.encode(stringToSign));
 			headers['Authorization'] = 'AWS ' + key + ':' + signature;
 		}
 		
@@ -3843,5 +3318,413 @@ Date.prototype.readableDay = function(altFormat) {
 	
 	return this.format(altFormat);
 };
+
+});
+
+require.define("/libs/crypto/md5.js", function (require, module, exports, __dirname, __filename) {
+    var Base64 = require('./base64');
+
+/*
+ * A JavaScript implementation of the RSA Data Security, Inc. MD5 Message
+ * Digest Algorithm, as defined in RFC 1321.
+ * Copyright (C) Paul Johnston 1999 - 2000.
+ * Updated by Greg Holt 2000 - 2001.
+ * See http://pajhome.org.uk/site/legal.html for details.
+ */
+
+/*
+ * Convert a 32-bit number to a hex string with ls-byte first
+ */
+var hex_chr = "0123456789abcdef";
+function rhex(num)
+{
+  str = "";
+  for(j = 0; j <= 3; j++)
+    str += hex_chr.charAt((num >> (j * 8 + 4)) & 0x0F) +
+           hex_chr.charAt((num >> (j * 8)) & 0x0F);
+  return str;
+}
+
+/*
+ * Convert a string to a sequence of 16-word blocks, stored as an array.
+ * Append padding bits and the length, as described in the MD5 standard.
+ */
+function str2blks_MD5(str)
+{
+  nblk = ((str.length + 8) >> 6) + 1;
+  blks = new Array(nblk * 16);
+  for(i = 0; i < nblk * 16; i++) blks[i] = 0;
+  for(i = 0; i < str.length; i++)
+    blks[i >> 2] |= str.charCodeAt(i) << ((i % 4) * 8);
+  blks[i >> 2] |= 0x80 << ((i % 4) * 8);
+  blks[nblk * 16 - 2] = str.length * 8;
+  return blks;
+}
+
+/*
+ * Add integers, wrapping at 2^32. This uses 16-bit operations internally 
+ * to work around bugs in some JS interpreters.
+ */
+function add(x, y)
+{
+  var lsw = (x & 0xFFFF) + (y & 0xFFFF);
+  var msw = (x >> 16) + (y >> 16) + (lsw >> 16);
+  return (msw << 16) | (lsw & 0xFFFF);
+}
+
+/*
+ * Bitwise rotate a 32-bit number to the left
+ */
+function rol(num, cnt)
+{
+  return (num << cnt) | (num >>> (32 - cnt));
+}
+
+/*
+ * These functions implement the basic operation for each round of the
+ * algorithm.
+ */
+function cmn(q, a, b, x, s, t)
+{
+  return add(rol(add(add(a, q), add(x, t)), s), b);
+}
+function ff(a, b, c, d, x, s, t)
+{
+  return cmn((b & c) | ((~b) & d), a, b, x, s, t);
+}
+function gg(a, b, c, d, x, s, t)
+{
+  return cmn((b & d) | (c & (~d)), a, b, x, s, t);
+}
+function hh(a, b, c, d, x, s, t)
+{
+  return cmn(b ^ c ^ d, a, b, x, s, t);
+}
+function ii(a, b, c, d, x, s, t)
+{
+  return cmn(c ^ (b | (~d)), a, b, x, s, t);
+}
+
+/*
+ * Take a string and return the hex representation of its MD5.
+ */
+function calcMD5(str)
+{
+  x = str2blks_MD5(str);
+  a =  1732584193;
+  b = -271733879;
+  c = -1732584194;
+  d =  271733878;
+
+  for(i = 0; i < x.length; i += 16)
+  {
+    olda = a;
+    oldb = b;
+    oldc = c;
+    oldd = d;
+
+    a = ff(a, b, c, d, x[i+ 0], 7 , -680876936);
+    d = ff(d, a, b, c, x[i+ 1], 12, -389564586);
+    c = ff(c, d, a, b, x[i+ 2], 17,  606105819);
+    b = ff(b, c, d, a, x[i+ 3], 22, -1044525330);
+    a = ff(a, b, c, d, x[i+ 4], 7 , -176418897);
+    d = ff(d, a, b, c, x[i+ 5], 12,  1200080426);
+    c = ff(c, d, a, b, x[i+ 6], 17, -1473231341);
+    b = ff(b, c, d, a, x[i+ 7], 22, -45705983);
+    a = ff(a, b, c, d, x[i+ 8], 7 ,  1770035416);
+    d = ff(d, a, b, c, x[i+ 9], 12, -1958414417);
+    c = ff(c, d, a, b, x[i+10], 17, -42063);
+    b = ff(b, c, d, a, x[i+11], 22, -1990404162);
+    a = ff(a, b, c, d, x[i+12], 7 ,  1804603682);
+    d = ff(d, a, b, c, x[i+13], 12, -40341101);
+    c = ff(c, d, a, b, x[i+14], 17, -1502002290);
+    b = ff(b, c, d, a, x[i+15], 22,  1236535329);    
+
+    a = gg(a, b, c, d, x[i+ 1], 5 , -165796510);
+    d = gg(d, a, b, c, x[i+ 6], 9 , -1069501632);
+    c = gg(c, d, a, b, x[i+11], 14,  643717713);
+    b = gg(b, c, d, a, x[i+ 0], 20, -373897302);
+    a = gg(a, b, c, d, x[i+ 5], 5 , -701558691);
+    d = gg(d, a, b, c, x[i+10], 9 ,  38016083);
+    c = gg(c, d, a, b, x[i+15], 14, -660478335);
+    b = gg(b, c, d, a, x[i+ 4], 20, -405537848);
+    a = gg(a, b, c, d, x[i+ 9], 5 ,  568446438);
+    d = gg(d, a, b, c, x[i+14], 9 , -1019803690);
+    c = gg(c, d, a, b, x[i+ 3], 14, -187363961);
+    b = gg(b, c, d, a, x[i+ 8], 20,  1163531501);
+    a = gg(a, b, c, d, x[i+13], 5 , -1444681467);
+    d = gg(d, a, b, c, x[i+ 2], 9 , -51403784);
+    c = gg(c, d, a, b, x[i+ 7], 14,  1735328473);
+    b = gg(b, c, d, a, x[i+12], 20, -1926607734);
+    
+    a = hh(a, b, c, d, x[i+ 5], 4 , -378558);
+    d = hh(d, a, b, c, x[i+ 8], 11, -2022574463);
+    c = hh(c, d, a, b, x[i+11], 16,  1839030562);
+    b = hh(b, c, d, a, x[i+14], 23, -35309556);
+    a = hh(a, b, c, d, x[i+ 1], 4 , -1530992060);
+    d = hh(d, a, b, c, x[i+ 4], 11,  1272893353);
+    c = hh(c, d, a, b, x[i+ 7], 16, -155497632);
+    b = hh(b, c, d, a, x[i+10], 23, -1094730640);
+    a = hh(a, b, c, d, x[i+13], 4 ,  681279174);
+    d = hh(d, a, b, c, x[i+ 0], 11, -358537222);
+    c = hh(c, d, a, b, x[i+ 3], 16, -722521979);
+    b = hh(b, c, d, a, x[i+ 6], 23,  76029189);
+    a = hh(a, b, c, d, x[i+ 9], 4 , -640364487);
+    d = hh(d, a, b, c, x[i+12], 11, -421815835);
+    c = hh(c, d, a, b, x[i+15], 16,  530742520);
+    b = hh(b, c, d, a, x[i+ 2], 23, -995338651);
+
+    a = ii(a, b, c, d, x[i+ 0], 6 , -198630844);
+    d = ii(d, a, b, c, x[i+ 7], 10,  1126891415);
+    c = ii(c, d, a, b, x[i+14], 15, -1416354905);
+    b = ii(b, c, d, a, x[i+ 5], 21, -57434055);
+    a = ii(a, b, c, d, x[i+12], 6 ,  1700485571);
+    d = ii(d, a, b, c, x[i+ 3], 10, -1894986606);
+    c = ii(c, d, a, b, x[i+10], 15, -1051523);
+    b = ii(b, c, d, a, x[i+ 1], 21, -2054922799);
+    a = ii(a, b, c, d, x[i+ 8], 6 ,  1873313359);
+    d = ii(d, a, b, c, x[i+15], 10, -30611744);
+    c = ii(c, d, a, b, x[i+ 6], 15, -1560198380);
+    b = ii(b, c, d, a, x[i+13], 21,  1309151649);
+    a = ii(a, b, c, d, x[i+ 4], 6 , -145523070);
+    d = ii(d, a, b, c, x[i+11], 10, -1120210379);
+    c = ii(c, d, a, b, x[i+ 2], 15,  718787259);
+    b = ii(b, c, d, a, x[i+ 9], 21, -343485551);
+
+    a = add(a, olda);
+    b = add(b, oldb);
+    c = add(c, oldc);
+    d = add(d, oldd);
+  }
+  return rhex(a) + rhex(b) + rhex(c) + rhex(d);
+}
+ 
+function b64_md5_digest(str) {
+	str = calcMD5(str);
+	var digest = '';
+	for (var i = 0; i < 32; i+= 2) {
+		digest += String.fromCharCode(parseInt(str.slice(i, i + 2), 16));
+	}
+	return Base64.encode(digest);
+}
+
+
+exports = module.exports = calcMD5;
+exports.base64 = b64_md5_digest;
+
+});
+
+require.define("/libs/crypto/shautils.js", function (require, module, exports, __dirname, __filename) {
+    
+/*
+ * A JavaScript implementation of the Secure Hash Algorithm, SHA-1, as defined
+ * in FIPS PUB 180-1
+ * Version 2.1a Copyright Paul Johnston 2000 - 2002.
+ * Other contributors: Greg Holt, Andrew Kepert, Ydnar, Lostinet
+ * Distributed under the BSD License
+ * See http://pajhome.org.uk/crypt/md5 for details.
+ */
+
+/*
+ * Configurable variables. You may need to tweak these to be compatible with
+ * the server-side, but the defaults work in most cases.
+ */
+var hexcase = 0;  /* hex output format. 0 - lowercase; 1 - uppercase        */
+var b64pad  = "="; /* base-64 pad character. "=" for strict RFC compliance   */
+var chrsz   = 8;  /* bits per input character. 8 - ASCII; 16 - Unicode      */
+
+/*
+ * These are the functions you'll usually want to call
+ * They take string arguments and return either hex or base-64 encoded strings
+ */
+function hex_sha1(s){return binb2hex(core_sha1(str2binb(s),s.length * chrsz));}
+function b64_sha1(s){return binb2b64(core_sha1(str2binb(s),s.length * chrsz));}
+function str_sha1(s){return binb2str(core_sha1(str2binb(s),s.length * chrsz));}
+function hex_hmac_sha1(key, data){ return binb2hex(core_hmac_sha1(key, data));}
+function b64_hmac_sha1(key, data){ return binb2b64(core_hmac_sha1(key, data));}
+function str_hmac_sha1(key, data){ return binb2str(core_hmac_sha1(key, data));}
+
+/*
+ * Perform a simple self-test to see if the VM is working
+ */
+function sha1_vm_test()
+{
+  return hex_sha1("abc") == "a9993e364706816aba3e25717850c26c9cd0d89d";
+}
+
+/*
+ * Calculate the SHA-1 of an array of big-endian words, and a bit length
+ */
+function core_sha1(x, len)
+{
+  /* append padding */
+  x[len >> 5] |= 0x80 << (24 - len % 32);
+  x[((len + 64 >> 9) << 4) + 15] = len;
+
+  var w = Array(80);
+  var a =  1732584193;
+  var b = -271733879;
+  var c = -1732584194;
+  var d =  271733878;
+  var e = -1009589776;
+
+  for(var i = 0; i < x.length; i += 16)
+  {
+    var olda = a;
+    var oldb = b;
+    var oldc = c;
+    var oldd = d;
+    var olde = e;
+
+    for(var j = 0; j < 80; j++)
+    {
+      if(j < 16) w[j] = x[i + j];
+      else w[j] = rol(w[j-3] ^ w[j-8] ^ w[j-14] ^ w[j-16], 1);
+      var t = safe_add(safe_add(rol(a, 5), sha1_ft(j, b, c, d)),
+                       safe_add(safe_add(e, w[j]), sha1_kt(j)));
+      e = d;
+      d = c;
+      c = rol(b, 30);
+      b = a;
+      a = t;
+    }
+
+    a = safe_add(a, olda);
+    b = safe_add(b, oldb);
+    c = safe_add(c, oldc);
+    d = safe_add(d, oldd);
+    e = safe_add(e, olde);
+  }
+  return Array(a, b, c, d, e);
+
+}
+
+/*
+ * Perform the appropriate triplet combination function for the current
+ * iteration
+ */
+function sha1_ft(t, b, c, d)
+{
+  if(t < 20) return (b & c) | ((~b) & d);
+  if(t < 40) return b ^ c ^ d;
+  if(t < 60) return (b & c) | (b & d) | (c & d);
+  return b ^ c ^ d;
+}
+
+/*
+ * Determine the appropriate additive constant for the current iteration
+ */
+function sha1_kt(t)
+{
+  return (t < 20) ?  1518500249 : (t < 40) ?  1859775393 :
+         (t < 60) ? -1894007588 : -899497514;
+}
+
+/*
+ * Calculate the HMAC-SHA1 of a key and some data
+ */
+function core_hmac_sha1(key, data)
+{
+  var bkey = str2binb(key);
+  if(bkey.length > 16) bkey = core_sha1(bkey, key.length * chrsz);
+
+  var ipad = Array(16), opad = Array(16);
+  for(var i = 0; i < 16; i++)
+  {
+    ipad[i] = bkey[i] ^ 0x36363636;
+    opad[i] = bkey[i] ^ 0x5C5C5C5C;
+  }
+
+  var hash = core_sha1(ipad.concat(str2binb(data)), 512 + data.length * chrsz);
+  return core_sha1(opad.concat(hash), 512 + 160);
+}
+
+/*
+ * Add integers, wrapping at 2^32. This uses 16-bit operations internally
+ * to work around bugs in some JS interpreters.
+ */
+function safe_add(x, y)
+{
+  var lsw = (x & 0xFFFF) + (y & 0xFFFF);
+  var msw = (x >> 16) + (y >> 16) + (lsw >> 16);
+  return (msw << 16) | (lsw & 0xFFFF);
+}
+
+/*
+ * Bitwise rotate a 32-bit number to the left.
+ */
+function rol(num, cnt)
+{
+  return (num << cnt) | (num >>> (32 - cnt));
+}
+
+/*
+ * Convert an 8-bit or 16-bit string to an array of big-endian words
+ * In 8-bit function, characters >255 have their hi-byte silently ignored.
+ */
+function str2binb(str)
+{
+  var bin = Array();
+  var mask = (1 << chrsz) - 1;
+  for(var i = 0; i < str.length * chrsz; i += chrsz)
+    bin[i>>5] |= (str.charCodeAt(i / chrsz) & mask) << (32 - chrsz - i%32);
+  return bin;
+}
+
+/*
+ * Convert an array of big-endian words to a string
+ */
+function binb2str(bin)
+{
+  var str = "";
+  var mask = (1 << chrsz) - 1;
+  for(var i = 0; i < bin.length * 32; i += chrsz)
+    str += String.fromCharCode((bin[i>>5] >>> (32 - chrsz - i%32)) & mask);
+  return str;
+}
+
+/*
+ * Convert an array of big-endian words to a hex string.
+ */
+function binb2hex(binarray)
+{
+  var hex_tab = hexcase ? "0123456789ABCDEF" : "0123456789abcdef";
+  var str = "";
+  for(var i = 0; i < binarray.length * 4; i++)
+  {
+    str += hex_tab.charAt((binarray[i>>2] >> ((3 - i%4)*8+4)) & 0xF) +
+           hex_tab.charAt((binarray[i>>2] >> ((3 - i%4)*8  )) & 0xF);
+  }
+  return str;
+}
+
+/*
+ * Convert an array of big-endian words to a base-64 string
+ */
+function binb2b64(binarray)
+{
+  var tab = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  var str = "";
+  for(var i = 0; i < binarray.length * 4; i += 3)
+  {
+    var triplet = (((binarray[i   >> 2] >> 8 * (3 -  i   %4)) & 0xFF) << 16)
+                | (((binarray[i+1 >> 2] >> 8 * (3 - (i+1)%4)) & 0xFF) << 8 )
+                |  ((binarray[i+2 >> 2] >> 8 * (3 - (i+2)%4)) & 0xFF);
+    for(var j = 0; j < 4; j++)
+    {
+      if(i * 8 + j * 6 > binarray.length * 32) str += b64pad;
+      else str += tab.charAt((triplet >> 6*(3-j)) & 0x3F);
+    }
+  }
+  return str;
+}
+
+
+exports.hex = hex_sha1;
+exports.base64 = b64_sha1;
+exports.string = str_sha1;
+exports.hex_hmac = hex_hmac_sha1;
+exports.base64_hmac = b64_hmac_sha1;
+exports.string_hmac = str_hmac_sha1;
 
 });

@@ -1,4 +1,4 @@
-data = require('./app/data')
+auth = require('./app/auth')
 
 # ensure we are at the correct domain
 if location.protocol isnt 'https:' or location.host isnt 's3.amazonaws.com'
@@ -23,8 +23,8 @@ $ ->
 		password = $('#password').val()
 		rememberme = $('#rememberme').attr('checked')
 		
-		data.register(key, secret, username, password).then ->
-			data.login(username, password, rememberme).then ->
+		auth.register(key, secret, username, password).then ->
+			auth.login(username, password, rememberme).then ->
 				location.href = './'
 			, (err) ->
 				$('#alerts').slideDown('fast').find('.msg').text(err.message)

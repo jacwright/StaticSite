@@ -1,8 +1,7 @@
-var crypto = require('./crypto'),
-	date = require('./date'),
-	b64_md5_digest = crypto.b64_md5_digest,
-	utf8 = crypto.utf8,
-	b64_hmac_sha1 = crypto.b64_hmac_sha1,
+var date = require('./date'),
+	md5 = require('./crypto/md5'),
+	sha1 = require('./crypto/shautils'),
+	utf8 = require('./crypto/utf8'),
 	promises = require('./promises'),
 	_ = require('underscore')._;
 
@@ -58,7 +57,7 @@ var s3 = exports.s3 = {
 				contentType = headers['Content-Type'] || mimeTypes[ext] || 'application/octet-stream';
 			}
 			headers['Content-Type'] = contentType;
-			contentMD5 = headers['Content-MD5'] = b64_md5_digest(data); // needs to be base64 md5-digest
+			contentMD5 = headers['Content-MD5'] = md5.base64(data); // needs to be base64 md5-digest
 		}
 		
 		headers['x-amz-date'] = date;
@@ -92,7 +91,7 @@ var s3 = exports.s3 = {
 				amzString + resource
 			].join('\n');
 			
-			var signature = b64_hmac_sha1(secret, utf8.encode(stringToSign));
+			var signature = sha1.base64_hmac(secret, utf8.encode(stringToSign));
 			headers['Authorization'] = 'AWS ' + key + ':' + signature;
 		}
 		
