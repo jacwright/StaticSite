@@ -40,24 +40,10 @@ html, body {
 	border-radius: 0 0 6px 6px;
 }
 </style>
-<script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.5.1/jquery.js"></script>
+<script type="text/javascript" src="js/jquery.js"></script>
+<script type="text/javascript" src="js/register.js"></script>
 <script type="text/javascript">
-$(function() {
-	$('#alerts').hide();
-	$('#key').focus();
-	$('#registerform').submit(function(event) {
-		event.preventDefault();
-		$('#alerts').slideDown('fast');
-	});
-	$('#registerform').keyup(function(event) {
-		if (event.which === 27) location.href = $('a.cancel').attr('href');
-	});
-	$('#alerts .close').click(function(event) {
-		event.preventDefault();
-		$('#alerts').slideUp('fast');
-		$('#key').focus();
-	});
-});
+require('/register');
 </script>
 </head>
 <body>
@@ -104,6 +90,13 @@ $(function() {
 					<label for="password">Password</label>
 					<div class="input">
 						<input id="password" type="password" class="text" name="password">
+					</div>
+				</div>
+				<div class="clearfix">
+					<div class="input inputs-list">
+						<label>
+							<input id="rememberme" type="checkbox" name="rememberme"> <span>Remember me</span>
+						</label>
 					</div>
 				</div>
 				<div class="actions">

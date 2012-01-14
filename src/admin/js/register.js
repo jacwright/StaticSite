@@ -340,7 +340,7 @@ exports.extname = function(path) {
 
 });
 
-require.define("/login.coffee", function (require, module, exports, __dirname, __filename) {
+require.define("/register.coffee", function (require, module, exports, __dirname, __filename) {
     (function() {
   var data;
 
@@ -352,32 +352,33 @@ require.define("/login.coffee", function (require, module, exports, __dirname, _
   }
 
   $(function() {
-    var siteurl;
     $('div.alert-message').hide();
-    siteurl = "http://" + (location.pathname.split('/')[1]) + "/";
-    $('a.siteurl').attr('href', siteurl);
-    $('#username').focus();
-    $('#loginform').submit(function(event) {
-      var password, rememberme, username;
+    $('#key').focus();
+    $('#registerform').submit(function(event) {
+      var key, password, rememberme, secret, username;
       event.preventDefault();
       $('#alerts').slideUp('fast');
+      key = $('#key').val();
+      secret = $('#secret').val();
       username = $('#username').val();
       password = $('#password').val();
       rememberme = $('#rememberme').attr('checked');
-      return data.login(username, password, rememberme).then(function() {
-        return location.href = './';
+      return data.register(key, secret, username, password).then(function() {
+        return data.login(username, password, rememberme).then(function() {
+          return location.href = './';
+        }, function(err) {
+          return $('#alerts').slideDown('fast').find('.msg').text(err.message);
+        });
       }, function(err) {
         return $('#alerts').slideDown('fast').find('.msg').text(err.message);
       });
     });
-    $('div.alert-message .close').click(function(event) {
+    $('#registerform').keyup(function(event) {
+      if (event.which === 27) return location.href = $('a.cancel').attr('href');
+    });
+    return $('div.alert-message .close').click(function(event) {
       event.preventDefault();
       $(this).closest('.alert-message').slideUp('fast');
-      return $('#username').focus();
-    });
-    return $('a.forgot-password').click(function(event) {
-      event.preventDefault();
-      $('#forgot').toggle('fast');
       return $('#username').focus();
     });
   });

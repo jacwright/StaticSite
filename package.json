@@ -7,10 +7,9 @@
 		"node": ">= 0.4.5"
 	},
 	"dependencies": {
-		"browserify": "1.8.3",
-		"backbone": "0.5.3",
-		"underscore": "1.2.4",
-        "stitch": "0.3.3",
-		"uglify-js": "1.2.3"
+		"browserify": "latest",
+		"backbone": "latest",
+		"underscore": "latest",
+		"uglify-js": "latest"
 	}
 }
