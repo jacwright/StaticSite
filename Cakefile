@@ -1,6 +1,7 @@
 fs = require 'fs'
 browserify = require 'browserify'
 uglify = require 'uglify-js'
+exec = require('child_process').exec
 
 base = "#{__dirname}/src/admin/js"
 watching = false
@@ -20,6 +21,7 @@ package = (files, output) ->
 	write = ->
 		fs.writeFileSync output, bundle.bundle()
 		console.log(ansi.green, 'Wrote', output, ansi.none)
+		exec('growlnotify -m "' + output.split('/').pop() + ' has been recompiled." "Recompile"')
 	
 	if watching
 		bundle.on 'bundle', -> write()
