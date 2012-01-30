@@ -18,21 +18,18 @@ var auth = module.exports = _.extend(new EventEmitter, {
 		var usernameSha = sha1.hash(username);
 		var passwordSha = sha1.hash(password);
 		
-		$.get('../api/auth/' + usernameSha).then(function(cypher) {
+		$.get('auth/' + usernameSha).then(function(cypher) {
 			var values = aes.decrypt(cypher, passwordSha, 256).split(':');
 			
 			if (values.length === 3 && values[0] === usernameSha) {
 				s3.auth(values[1], values[2]);
 				var creds = username + ':' + values[1] + ':' + values[2];
 				bucket = s3.bucket(bucketName);
-				bucket.list('api/auth/' + usernameSha).then(function() {
-					deferred.fulfill();
-					
+				bucket.list('admin/auth/' + usernameSha).then(function() {
 					sessionStorage.setItem('creds', creds);
-					
 					if (remember) localStorage.setItem('creds', creds);
 					
-					data.trigger('login');
+					deferred.fulfill();
 				}, function(error) {
 					deferred.fail(error);
 				});
@@ -53,6 +50,6 @@ var auth = module.exports = _.extend(new EventEmitter, {
 		var cypher = aes.encrypt([username, key, secret].join(':'), password, 256);
 		
 		// if we can successfully put this file to the bucket then we have access and are logged in
-		return bucket.put('api/auth/' + username, cypher, { acl: 'public-read' });
+		return bucket.put('admin/auth/' + username, cypher, { acl: 'public-read' });
 	}
 });

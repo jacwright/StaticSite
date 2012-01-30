@@ -156,7 +156,8 @@ exports.when = (params...) ->
 	deferred = new Deferred
 	count = params.length
 	failed = false
-	failCallback = (value) ->
+	fulfilledCallback = ->
+	failedCallback = (value) ->
 		failed = true
 		value
 	
@@ -169,13 +170,13 @@ exports.when = (params...) ->
 					deferred.fail params...
 				else
 					deferred.fulfill params...
-			
-			value
 	
 	
 	for obj, name in params
 		if obj and typeof obj.then is 'function'
-			obj.then createCallback(name), failCallback 
+			finishedCallback = createCallback(name)
+			obj.then fulfilledCallback, failedCallback 
+			obj.then finishedCallback, finishedCallback
 		else
 			--count
 	
@@ -343,14 +344,6 @@ exports.wrap = (method, promise) ->
 		
 		method.apply @, args
 		deferred.promise
-
-
-# takes a promise (obj with a "then" method) from another library and converts it to this one (e.g. jquery.ajax
-exports.convert = (promise) ->
-	deferred = new Deferred
-	promise.then(deferred.fulfill, deferred.fail)
-	deferred.promise
-
 
 # shortcuts to create synchronous failed and fulfilled promises.
 exports.fulfilled = (result, promise) ->

@@ -28,6 +28,7 @@ $ ->
 		auth.login(username, password, rememberme).then ->
 			location.href = './'
 		, (err) ->
+			console.log(err);
 			$('#alerts').slideDown('fast').find('.msg').text(err.message)
 		
 	

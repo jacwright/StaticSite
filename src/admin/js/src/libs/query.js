@@ -5,12 +5,13 @@ function query(field) {
 		return new query(field);
 	}
 	
-	if (field) {
-		this._expression = new Expression(field);
-	}
+	if (field) this._field(field);
 	this._eval = '';
 	this._lookups = {};
 	this._sorts = [];
+	this._actions = [];
+	this._map = [];
+	this._reduce = [];
 }
 
 function select(array) {
@@ -21,6 +22,7 @@ function select(array) {
 	this.array = array;
 }
 
+query.select = select;
 
 (function() {
 	
@@ -34,6 +36,15 @@ function select(array) {
 			if (sort) array.sort(sort);
 			if (this._offset) array = array.slice(this._offset, array.length - (this._limit || 0));
 			else if (this._limit) array.length = Math.min(array.length, this._limit);
+			this._actions.forEach(function(action) {
+				array.forEach(action);
+			});
+			this._map.forEach(function(action) {
+				array = array.map(action);
+			});
+			this._reduce.forEach(function(action) {
+				array = array.reduce(action);
+			});
 			return array;
 		},
 		getFilter: function() {
@@ -57,6 +68,12 @@ function select(array) {
 				}
 				return direction;
 			};
+		},
+		getActions: function() {
+			return this._actions;
+		},
+		_field: function(field) {
+			this._expression = new Expression(field);
 		},
 		_add: function(eval, clean) {
 			this._eval += eval;
@@ -115,15 +132,22 @@ function select(array) {
 		or: function(field) {
 			return this._term('||', field);
 		},
-		not: function(field) {
-			if (this._expression) this._expression.not = !this._expression.not;
+		not: function(value) {
+			if (this._expression) {
+				this._expression.not = !this._expression.not;
+				if (value !== undefined) this._expression.value = value;
+			}
 			return this;
 		},
 		equals: function(value) {
-			return this._oper('==', value);
+			return this._oper('===', value);
 		},
 		is: function(value) {
-			return this._oper('==', value);
+			return this._oper('===', value);
+		},
+		isnt: function(value) {
+			this.not();
+			return this.is(value);
 		},
 		within: function(value) { // when an array of values is passed
 			var lookup = {};
@@ -223,21 +247,24 @@ function select(array) {
 		offset: function(value) {
 			this._offset = value;
 			return this;
+		},
+		set: function(attrs) {
+			this._actions.push(function(model) {
+				model.set(attrs);
+			});
+			return this;
 		}
 	};
 	
 	
-	select.prototype = Object.create(query, {
-		constructor: select,
-		
-		where: function(field) {
-			this._expression = new Expression(field);
-		},
-		
-		exec: function() {
-			return this.on(this.array);
-		}
-	});
+	select.prototype = Object.create(query.prototype);
+	select.prototype.where = function(field) {
+		if (field) this._expression = new Expression(field);
+		return this;
+	};
+	select.prototype.end = function() {
+		return this.on(this.array);
+	};
 	
 	
 	
@@ -258,7 +285,7 @@ function select(array) {
 					case '%not':
 						return self.not ? '!' : '';
 					case '%term':
-						return 'obj.' + self.term + (self.value instanceof Date ? '.getTime()' : '');
+						return '(obj.' + self.term + ' || (typeof obj.get === "function" && obj.get("' + self.term + '")))' + (self.value instanceof Date ? '.getTime()' : '');
 					case '%operator':
 						return self.operator;
 					case '%value':
@@ -321,7 +348,6 @@ function select(array) {
 	
 })();
 
-if (typeof exports !== 'undefined') {
-	exports.query = query;
-	exports.select = select;
+if (typeof exports !== 'undefined' && typeof module !== 'undefined') {
+	module.exports = query;
 }

@@ -1,4 +1,3 @@
-data = require('./app/data')
 
 # ensure we are at the correct domain
 if location.protocol isnt 'https:' or location.host isnt 's3.amazonaws.com'
@@ -7,18 +6,19 @@ if location.protocol isnt 'https:' or location.host isnt 's3.amazonaws.com'
 
 
 
+data = require('./app/data')
+pages = require('./app/page').collection
+
+
+
 setup = ->
-	return
+	
 	# create main app collections
-	col = data.collections
-	col.pages = createCollection('pages')
-	col.templates = createCollection('templates')
-	col.content = createCollection('content')
-#	col.plugins = createCollection('plugins')
+	loadPages()
 	
 	# load the data
-	return data.refresh({ silent: true })
-			.get('collections')#.get('plugins').then(initPlugins)
+#	return data.refresh({ silent: true })
+#			.get('collections')#.get('plugins').then(initPlugins)
 
 
 openPage = (name, page) ->
@@ -27,25 +27,13 @@ openPage = (name, page) ->
 	$('body').removeClass('loading')
 
 
-# allow plugins?
-#initPlugins = (plugins) ->
-#	plugins.forEach (plugin) ->
-#		require(plugin.moduleId) if (plugin.active)
-#	return data
 
 
+loadPages = (key) ->
+	cache = localStorage.getItem('pages') or undefined if typeof localStorage isnt 'undefined'
+	cache = JSON.parse(cache)
+	pages.refresh(cache, {silent: true})
 
-createCollection = (key) ->
-	data = localStorage.getItem(key) || undefined if typeof localStorage isnt 'undefined'
-	try
-		collection = require(key)[key]
-		collection.refresh(data, {silent: true})
-	catch e
-		collection = new Collection(data, { url: 'api/' + key })
-	
-	return collection
-
-	
 	
 	
 	

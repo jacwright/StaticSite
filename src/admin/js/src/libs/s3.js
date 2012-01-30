@@ -95,19 +95,24 @@ var s3 = exports.s3 = {
 			headers['Authorization'] = 'AWS ' + key + ':' + signature;
 		}
 		
-		return promises.convert($.ajax({
+		return promises.when($.ajax({
 			type: method,
 			url: url,
 			headers: headers,
 			data: data
-		})).fulfilled(function() {
-			console.log(arguments);
-		}).failed(function(xhr) {
+		})).fulfilled(function(results) {
+			var deferred = new promises.Deferred();
+			setTimeout(function() {
+				deferred.fulfill(results[0]);
+			}, 0);
+			return deferred.promise;
+		}).failed(function(results) {
+			var xhr = results[0];
 			var xml = $(xhr.responseText);
 			if (xml.find('code').text() == 'SignatureDoesNotMatch') {
 				console.error('Signature does not match, expected:\n', xml.find('StringToSign').text().replace(/\n/g, '\\n'), '\nactual:\n', stringToSign.replace(/\n/g, '\\n'));
 			}
-			return new Error(xml.find('code').text());
+			return new Error(xml.find('message').text());
 		});
 	}
 };
@@ -122,7 +127,7 @@ Bucket.prototype = {
 	constructor: Bucket,
 	
 	list: function(folder, options) {
-		url = this.url;
+		var url = this.url;
 		options = _.extend(options || {}, {
 			method: 'get',
 			url: url
@@ -130,7 +135,13 @@ Bucket.prototype = {
 		if (folder) {
 			(options.params || (options.params = {})).prefix = folder;
 		}
-		return s3.load(options).then(xmlToObj.bind(null, ['contents']));
+		return s3.load(options).then(xmlToObj).then(function(results) {
+			// if there is only one item (or less) in the list be sure to make it an array anyway
+			if (!results.contents) results.contents = [];
+			else if (! (results.contents instanceof Array) ) {
+				results.contents = [results.contents];
+			}
+		});
 	},
 	
 	get: function(url, options) {
@@ -189,40 +200,6 @@ function addQueryParams(url, params) {
 var signedHeader = /^(versioning|location|acl|torrent|versionid)/;
 signedHeader.test = signedHeader.test.bind(signedHeader);
 
-function xmlToObj(xml, arrayProps) {
-	if (xml instanceof Array) {
-		var tmp = xml;
-		xml = arrayProps.firstChild;
-		arrayProps = tmp;
-	}
-	
-	// if this isn't really xml return it
-	if (!xml.nodeType) return xml;
-	
-	if (xml.childNodes.length == 1 && xml.firstChild.nodeType == 3) return xml.firstChild.nodeValue;
-	
-	var obj = {};
-	var arrprops = {};
-	if (arrayProps) {
-		arrayProps.forEach(function(prop) {
-			arrprops[prop] = true;
-			obj[prop] = [];
-		});
-	}
-	
-	var children = xml.childNodes;
-	for (var i = 0, l = children.length; i < l; i++) {
-		var child = children[i];
-		var name = child.nodeName.replace(/^[A-Z]+/, function(match) {
-			return match.toLowerCase();
-		});
-		var value = toType(xmlToObj(child));
-		if (arrprops[name]) obj[name].push(value);
-		else obj[name] = value;
-	}
-	
-	return obj;
-}
 
 function toType(value) {
 	if (typeof value !== 'string') return value;
@@ -263,6 +240,37 @@ var types = [
 		}
 	}
 ];
+
+function xmlToObj(node, obj) {
+	var i, l;
+	if (!obj) {
+		node = node.firstChild;
+		obj = {};
+	}
+	if (node.childNodes.length) {
+		for (i = 0, l = node.childNodes.length; i < l; i++) {
+			var child = node.childNodes[i];
+			
+			// if this node only contains text, just return the text
+			if (l === 1 && child.nodeType === 3) return child.nodeValue;
+			
+			var name = child.nodeName.replace(/^[A-Z]/, function(match) {
+				return match.toLowerCase();
+			});
+			if (node.getElementsByTagName(child.tagName).length > 1) {
+				// this is an array, create it and add to it
+				if (!obj[name]) obj[name] = [];
+				obj[name].push(xmlToObj(child, {}));
+			} else if (child.nodeName && child.nodeName != '#cdata-section') {
+				obj[name] = xmlToObj(child, {});
+			}
+		}
+	} else {
+		return null;
+	}
+	return obj;
+}
+
 
 
 var mimeTypes = exports.mimeTypes = {
