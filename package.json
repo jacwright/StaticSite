@@ -7,9 +7,9 @@
 		"node": ">= 0.4.5"
 	},
 	"dependencies": {
-		"browserify": "latest",
-		"backbone": "latest",
-		"underscore": "latest",
-		"uglify-js": "latest"
+		"watch": "latest",
+		"coffee-script": "latest",
+		"uglify-js": "latest",
+		"knox": "latest"
 	}
 }

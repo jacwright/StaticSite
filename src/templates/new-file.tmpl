@@ -1,0 +1,39 @@
+<div class="modal fade">
+	<div class="modal-header">
+		<a class="close" data-dismiss="modal">×</a>
+		<h3>Add a file</h3>
+	</div>
+	<div class="modal-body">
+		<ul class="nav nav-pills">
+			<li class="active"><a href="#upload-file" data-toggle="tab">Upload</a></li>
+			<li><a href="#create-file" data-toggle="tab">Create</a></li>
+		</ul>
+		<div class="tab-content">
+			<div id="upload-file" class="tab-pane active">
+				<div id="file-drop" class="hero-unit well">
+					<h1>Drop files here</h1>
+				</div>
+			</div>
+			<div id="create-file" class="tab-pane">
+				<form class="form-horizontal">
+					<div class="control-group">
+						<label class="control-label">File name</label>
+						<div class="controls">
+							<input>
+						</div>
+					</div>
+					<div class="control-group">
+						<label class="control-label">Type</label>
+						<div class="controls">
+							<input>
+						</div>
+					</div>
+				</form>
+			</div>
+		</div>
+	</div>
+	<div class="modal-footer">
+		<button data-dismiss="modal" class="btn">Close</button>
+		<button class="btn btn-primary">Save changes</button>
+	</div>
+</div>
