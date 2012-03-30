@@ -4,6 +4,7 @@ define ['lib/crypto', 'lib/promises', 'lib/s3'], (crypto, promises, s3) ->
 	{sha1, aes} = crypto
 	
 	path = 'auth/'
+	bucketName = location.pathname.split('/')[1]
 	
 	
 	login: (username, password, remember) ->
@@ -43,17 +44,15 @@ define ['lib/crypto', 'lib/promises', 'lib/s3'], (crypto, promises, s3) ->
 		s3.auth key, secret
 		
 		username
-			
 	
 	
-#	
-#	register: (key, secret, username, password) ->
-#		s3.auth key, secret
-#		bucket = s3.bucket(bucketName)
-#		
-#		usernameSha = sha1(username)
-#		passwordSha = sha1(password)
-#		
-#		cypher = aes.encrypt([ usernameSha, key, secret ].join(':'), passwordSha)
-#		bucket.put 'admin/auth/' + usernameSha, cypher,
-#			acl: 'public-read'
+	
+	register: (key, secret, username, password) ->
+		s3.auth key, secret
+		bucket = s3.bucket(bucketName)
+		
+		usernameSha = sha1(username)
+		passwordSha = sha1(password)
+		
+		cypher = aes.encrypt([ key, secret ].join(':'), passwordSha)
+		bucket.put 'admin/auth/' + usernameSha, cypher, acl: 'public-read'

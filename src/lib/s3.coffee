@@ -133,9 +133,9 @@ define ['./date', './crypto', './promises'], (_date_, crypto, promises) ->
 			
 			s3.load(options)
 		
-		put: (url, data, options) ->
+		put: (url, data, options = {}) ->
 			url = @url + url
-			options = $.extend options || {},
+			options = $.extend options,
 				method: 'put'
 				url: url
 				data: data

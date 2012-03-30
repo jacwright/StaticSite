@@ -146,8 +146,9 @@
       };
 
       Bucket.prototype.put = function(url, data, options) {
+        if (options == null) options = {};
         url = this.url + url;
-        options = $.extend(options || {}, {
+        options = $.extend(options, {
           method: 'put',
           url: url,
           data: data

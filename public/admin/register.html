@@ -51,7 +51,7 @@
 </style>
 <script src="js/jquery.min.js"></script>
 <script src="js/bootstrap.min.js"></script>
-<script src="js/require.min.js" data-main="js/login"></script>
+<script src="js/require.min.js" data-main="js/register"></script>
 </head>
 
 <body style="display:none">
@@ -59,23 +59,32 @@
 <div class="container">
 	<div class="content pod">
 		<div class="page-header">
-			<h1>Website Admin <small>Please sign in to continue</small></h1>
+			<h1>Website Admin <small>Registration is required</small></h1>
 		</div>
 		<div id="alerts" class="alert block-message error">
 			<a class="close">×</a>
-			<h4>There was an error signing in.</h4>
+			<p><strong>There was an error registering.</strong></p>
 			<span class="msg"></span>
 		</div>
 		
-		<div id="forgot" class="alert block-message info">
-			<a class="close">×</a>
-			<h4>Forgot Password</h4>
-			We cannot retrieve passwords. You may <a href="register.html">re-register</a> with the same username.
-		</div>
-		
-		<form id="loginform" name="loginform" class="login form-horizontal">
+		<form id="registerform" name="registerform" class="register form-horizontal">
 			<fieldset>
-				<legend>Sign In</legend>
+				<legend>Register</legend>
+				<div class="control-group">
+					<label class="control-label" for="key">Access Key ID</label>
+					<div class="controls">
+						<input id="key" type="text" class="text" name="key">
+						<p class="help-block">
+							<a href="https://aws-portal.amazon.com/gp/aws/developer/account/index.html?action=access-key" target="_blank">Security Credentials</a> are required from Amazon
+						</p>
+					</div>
+				</div>
+				<div class="control-group">
+					<label class="control-label" for="secret">Secret Access Key</label>
+					<div class="controls">
+						<input id="secret" type="password" class="text" name="secret">
+					</div>
+				</div>
 				<div class="control-group">
 					<label class="control-label" for="username">User Name</label>
 					<div class="controls">
@@ -96,12 +105,8 @@
 					</div>
 				</div>
 				<div class="form-actions">
-					<button type="submit" class="btn btn-primary">Sign In</button>
-					<button class="cancel btn" href="#">Cancel</button>
-					<div class="other-actions">
-						<a href="register.html" class="register-new">Register</a> or
-						<a href="#" class="forgot-password">Forgot Password</a>
-					</div>
+					<button type="submit" class="btn btn-primary">Register</button>
+					<a href="login.html" class="btn cancel">Cancel</a>
 				</div>
 			</fieldset>
 		</form>

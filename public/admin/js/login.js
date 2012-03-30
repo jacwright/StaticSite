@@ -3,7 +3,7 @@
   require(['app/auth', 'util/admin-redirect'], function(auth) {
     return $(function() {
       $('body').fadeIn();
-      $('div.alert-message').hide();
+      $('div.alert').hide();
       $('.cancel').click(function(event) {
         event.preventDefault();
         return history.back();
@@ -23,9 +23,9 @@
           return $('#alerts').slideDown('fast').find('.msg').text(err.message);
         });
       });
-      $('div.alert-message .close').click(function(event) {
+      $('div.alert .close').click(function(event) {
         event.preventDefault();
-        $(this).closest('.alert-message').slideUp('fast');
+        $(this).closest('.alert').slideUp('fast');
         return $('#username').focus();
       });
       return $('a.forgot-password').click(function(event) {
