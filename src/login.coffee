@@ -1,17 +1,5 @@
 
-require ['app/auth'], (auth) ->
-	
-	
-	# ensure we are at the correct domain
-	if location.protocol isnt 'https:' or location.host isnt 's3.amazonaws.com'
-		path = 'websights' + location.pathname.replace(/^\/websights/, '')
-		
-		if location.host isnt 's3.amazonaws.com'
-			path += '#' + location.host
-		
-		location.href = "https://s3.amazonaws.com/#{path}"
-		throw new Error('Cannot administer site from this location.')
-	
+require ['app/auth', 'util/admin-redirect'], (auth) ->
 	
 	# view code
 	$ ->

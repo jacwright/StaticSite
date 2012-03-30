@@ -1,13 +1,6 @@
 (function() {
 
-  require(['app/auth'], function(auth) {
-    var path;
-    if (location.protocol !== 'https:' || location.host !== 's3.amazonaws.com') {
-      path = 'websights' + location.pathname.replace(/^\/websights/, '');
-      if (location.host !== 's3.amazonaws.com') path += '#' + location.host;
-      location.href = "https://s3.amazonaws.com/" + path;
-      throw new Error('Cannot administer site from this location.');
-    }
+  require(['app/auth', 'util/admin-redirect'], function(auth) {
     return $(function() {
       $('body').fadeIn();
       $('div.alert-message').hide();

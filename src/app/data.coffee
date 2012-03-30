@@ -1,7 +1,7 @@
 EventEmitter = require('events').EventEmitter
-promises = require('../libs/promises')
+promises = require('../lib/promises')
 _ = require('underscore')
-s3 = require('../libs/s3').s3
+s3 = require('../lib/s3').s3
 
 
 bucketName = location.pathname.replace(/^\/([^\/]+).*/, '$1')
@@ -17,7 +17,7 @@ data = module.exports = _.extend new EventEmitter,
 	
 	put: (url, data) -> bucket.put('api/' + url, data)
 	
-	destory: (url) -> bucket.destory('api/' + url)
+	destory: (url) -> bucket.destroy('api/' + url)
 	
 	refresh: (options) ->
 		deferred = new promises.Deferred()

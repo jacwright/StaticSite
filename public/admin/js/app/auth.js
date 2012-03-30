@@ -3,7 +3,7 @@
   define(['lib/crypto', 'lib/promises', 'lib/s3'], function(crypto, promises, s3) {
     var aes, path, sha1;
     sha1 = crypto.sha1, aes = crypto.aes;
-    path = '/websights/auth/';
+    path = 'auth/';
     return {
       login: function(username, password, remember) {
         var deferred, passwordSha, usernameSha;

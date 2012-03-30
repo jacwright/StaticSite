@@ -1,4 +1,4 @@
-query = require('../libs/query')
+query = require('../lib/query')
 Model = require('Backbone').Model
 Collection = require('Backbone').Collection
 

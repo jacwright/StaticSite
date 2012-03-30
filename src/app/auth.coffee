@@ -3,7 +3,7 @@ define ['lib/crypto', 'lib/promises', 'lib/s3'], (crypto, promises, s3) ->
 	
 	{sha1, aes} = crypto
 	
-	path = '/websights/auth/'
+	path = 'auth/'
 	
 	
 	login: (username, password, remember) ->

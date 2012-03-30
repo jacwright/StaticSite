@@ -5,7 +5,7 @@ coffee = require 'coffee-script'
 templater = require './lib/templater'
 watch = require 'watch'
 knox = require 'knox'
-
+bucket = null
 		
 ansi =
 	green: '\033[32m'
@@ -13,10 +13,17 @@ ansi =
 	yellow: '\033[33m'
 	none: '\033[0m'
 
-bucket = knox.createClient
-	key: process.env.AWS_ACCESS_KEY_ID
-	secret: process.env.AWS_SECRET_ACCESS_KEY
-	bucket: process.env.AWS_DEFAULT_BUCKET
+
+getBucket = (options) ->
+	config =
+		key: options.key or process.env.AWS_ACCESS_KEY_ID
+		secret: options.secret or process.env.AWS_SECRET_ACCESS_KEY
+		bucket: options.bucket or process.env.AWS_DEFAULT_BUCKET
+	
+	if config.key and config.secret and config.bucket
+		knox.createClient config
+	else
+		false
 
 
 
@@ -68,17 +75,27 @@ handleS3Result = (cb, err, res) ->
 
 
 uploadFile = (path) ->
-	remotePath = path.replace(/^public/, '')
-	remotePath = '/admin/' if remotePath is '/admin/index.html'
+	if path.slice(-1) is '/'
+		isDir = true
 	
-	bucket.putFile path, remotePath, handleS3Result.bind null, ->
-		growlNotify(remotePath)
-		console.log 'uploaded:', ansi.green, path, ansi.none
+	remotePath = path.replace(/^public/, '')
+	return if remotePath is '/' or remotePath is '/admin/'
+	remotePath = '/admin/' if remotePath is '/admin/main.html'
+	
+	if isDir
+		req = bucket.put(remotePath, 'Content-Length': 0).on('response', handleS3Result.bind null, ->
+			growlNotify(remotePath)
+			console.log 'uploaded:', ansi.green, path, ansi.none
+		, null).end()
+	else
+		bucket.putFile path, remotePath, handleS3Result.bind null, ->
+			growlNotify(remotePath)
+			console.log 'uploaded:', ansi.green, path, ansi.none
 
 
 deleteFile = (path) ->
 	remotePath = path.replace(/^public/, '')
-	remotePath = '/admin/' if remotePath is '/admin/index.html'
+	remotePath = '/admin/' if remotePath is '/admin/main.html'
 	
 	bucket.deleteFile remotePath, handleS3Result.bind null, ->
 		console.log 'deleted:', ansi.green, path, ansi.none
@@ -94,46 +111,87 @@ growlNotify = (uploaded) ->
 		timeout = null
 	, 1000
 
-task 'watch', 'Watch scripts for changes and compile them when they change', ->
+
+
+
+
+
+option '-k', '--key [KEY]', 'AWS access key id. Will attempt to use the environment variable AWS_ACCESS_KEY_ID if not provided.'
+option '-s', '--secret [SECRET]', 'AWS secret access key. Will attempt to use the environment variable AWS_SECRET_ACCESS_KEY if not provided.'
+option '-b', '--bucket [BUCKET]', 'S3 bucket to upload to. Will attempt to use the environment variable AWS_DEFAULT_BUCKET if not provided.'
+
+
+task 'make', 'Compile scripts and upload them', (options) ->
+	bucket = getBucket(options)
 	
-	watch.createMonitor 'src', interval: 100, (monitor) ->
-		for f, stat of monitor.files
+	watch.walk 'src', (err, files) ->
+		for filename, stat of files
 			if stat.isDirectory()
 				try
-					fs.mkdirSync(getDest(f))
+					fs.mkdirSync(getDest(filename))
 				catch e
 			else
-				compile(f) 
+				compile(filename)
+		
+		unless bucket
+			console.log 'key, secret, and/or bucket undefined, will not upload'
+			return
+		
+		watch.walk 'public', (err, files) ->
+			for filename, stat of files
+				filename += '/' if stat.isDirectory()
+				uploadFile(filename)
+
+
+
+
+task 'watch', 'Watch scripts and files for changes and compile and upload them when they change', (options) ->
+	bucket = getBucket(options)
+	
+	watch.createMonitor 'src', interval: 100, (monitor) ->
+		for filename, stat of monitor.files
+			if stat.isDirectory()
+				try
+					fs.mkdirSync(getDest(filename))
+				catch e
+			else
+				compile(filename) 
 		
 		console.log 'watching...'
 		
-		monitor.on 'created', (f, curr, prev) ->
+		monitor.on 'created', (filename, curr, prev) ->
 			if curr.isDirectory()
-				dest = getDest(f)
+				dest = getDest(filename)
 				fs.mkdirSync(dest)
-				console.log 'created: ' + dest
+				console.log 'created:', dest
 			else
-				compile(f)
+				compile(filename)
 		
-		monitor.on 'changed', (f, curr, prev) ->
-			compile(f) unless curr.isDirectory()
+		monitor.on 'changed', (filename, curr, prev) ->
+			compile(filename) unless curr.isDirectory()
 		
-		monitor.on 'removed', (f, curr, prev) ->
-			remove(f)
+		monitor.on 'removed', (filename, curr, prev) ->
+			remove(filename)
 	
+	unless bucket
+		console.log 'key, secret, and/or bucket undefined, will not upload'
+		return
 	
 	watch.createMonitor 'public', interval: 100, (monitor) ->
-		for f, stat of monitor.files
-			unless stat.isDirectory()
-				uploadFile(f) 
+		for filename, stat of monitor.files
+			filename += '/' if stat.isDirectory()
+			uploadFile(filename)
 		
-		monitor.on 'created', (f, curr, prev) ->
-			uploadFile(f) unless curr.isDirectory()
+		monitor.on 'created', (filename, curr, prev) ->
+			filename += '/' if stat.isDirectory()
+			uploadFile(filename)
 		
-		monitor.on 'changed', (f, curr, prev) ->
-			uploadFile(f) unless curr.isDirectory()
+		monitor.on 'changed', (filename, curr, prev) ->
+			filename += '/' if stat.isDirectory()
+			uploadFile(filename)
 		
-		monitor.on 'removed', (f, curr, prev) ->
-			deleteFile(f) unless curr.isDirectory()
+		monitor.on 'removed', (filename, curr, prev) ->
+			filename += '/' if stat.isDirectory()
+			deleteFile(filename)
 	
 

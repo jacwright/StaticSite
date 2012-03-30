@@ -1,100 +1,14 @@
-<!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-	<meta charset="utf-8">
-	<title>Admin</title>
-	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<meta name="description" content="">
-	<meta name="author" content="">
-	<link href="css/bootstrap.min.css" rel="stylesheet">
-	<link href="css/admin.css" rel="stylesheet">
-	<link href="css/icon-sprite.css" rel="stylesheet">
-	<!--[if lt IE 9]>
-	<script src="http://html5shim.googlecode.com/svn/trunk/html5.js"></script>
-	<![endif]-->
-	<link rel="shortcut icon" href="img/favicon.ico">
+<title>Admin</title>
+<script>
+var bucket = location.hostname;
+location.href = 'https://s3.amazonaws.com/' + bucket + '/admin/'
+</script>
 </head>
-
-<body style="display: none">
-
-<div class="navbar navbar-fixed-top">
-	<div class="navbar-inner">
-		<div class="container-fluid">
-			<a class="btn btn-navbar" data-toggle="collapse" data-target=".nav-collapse">
-				<span class="icon-bar"></span>
-				<span class="icon-bar"></span>
-				<span class="icon-bar"></span>
-			</a>
-			<a class="brand" href="#">Websights</a>
-			<div class="nav-collapse">
-				<ul class="nav">
-					<li class="active"><a href="#">Site</a></li>
-					<li><a href="#templates">Templates</a></li>
-					<li><a href="#settings">Settings</a></li>
-				</ul>
-			</div>
-		</div>
-	</div>
-</div>
-
-<div id="container" class="container-fluid">
-	<div id="sidebar" class="pod">
-		<div class="btn-toolbar">
-			<div class="btn-group">
-				<button class="btn" style="overflow: hidden">
-					<span class="icon add"></span> Add
-					<input type="file" class="btn" name="files[]" multiple style="position: absolute; opacity: 0; left: 0; right: 0; top: 0; height: 20px;">
-				</button>
-				<button class="btn dropdown-toggle" data-toggle="dropdown">
-					<span class="caret"></span>
-				</button>
-				<ul class="dropdown-menu">
-					<li id="new-file"><a href="#"><span class="icon page-add"></span> Add page</a></li>
-					<li id="new-page"><a href="#"><span class="icon layout-add"></span> Add page from template</a></li>
-					<li id="new-folder"><a href="#"><span class="icon folder-add"></span> Add folder</a></li>
-				</ul>
-			</div>
-			<div class="btn-group">
-				<button id="delete-file" class="btn"><span class="icon delete"></span></button>
-			</div>
-		</div>
-		<div id="menu">
-			<ul>
-			</ul>
-		</div>
-	</div>
-	<div id="breadcrumbs" class="btn-toolbar">
-		<ul class="breadcrumb pod">
-			<li>
-				<div class="btn-group">
-					<a class="btn btn-mini dropdown-toggle" data-toggle="dropdown" href="#">
-						<span class="caret"></span>
-					</a>
-					<ul id="site-list" class="dropdown-menu">
-						<li id="new-site"><a href="#"><span class="icon sitemap-add"></span> New...</a></li>
-					</ul>
-				</div>
-				<a id="selected-site" href="/"></a>
-			</li>
-			<!--<li>-->
-				<!--<span class="divider">/</span> <a href="/about-us">about-us</a>-->
-			<!--</li>-->
-			<!--<li class="active">-->
-				<!--<span class="divider">/</span> jobs-->
-			<!--</li>-->
-		</ul>
-	</div>
-	<div id="main">
-		<div id="editors" class="pod">
-			<!--<div id="code-editor"></div>-->
-			<iframe id="frame" src="http://www2.rainbowspreschool.com/"></iframe>
-		</div>
-	</div>
-</div>
-
-<script src="js/jquery.min.js"></script>
-<script src="js/bootstrap.min.js"></script>
-<script src="js/lib/ace/ace-noconflict.js"></script>
-<script src="js/require.min.js" data-main="js/main"></script>
+<body>
+<script type="text/javascript">
+document.write('<a href="https://s3.amazonaws.com/' + bucket + '/admin/">Go to admin</a>');
+</script>
 </body>
 </html>
