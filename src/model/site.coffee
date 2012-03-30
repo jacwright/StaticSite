@@ -1,5 +1,5 @@
 
-define ['./model', './collection', './file', 'lib/s3', 'lib/promises'], (Model, Collection, File, s3, promises) ->
+define ['./model', './collection', './file', 'lib/s3', './folder', './page'], (Model, Collection, File, s3) ->
 	
 	trailingSlash = /\/$/
 	fileName = /[^\/]+\/?$/

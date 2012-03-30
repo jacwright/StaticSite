@@ -1,5 +1,6 @@
 
-define ['./model', 'lib/backbone'], (Model) ->
+define ['./model', 'lib/array-query', 'lib/backbone'], (Model, query) ->
+	
 	
 	class Collection extends Backbone.Collection
 		
@@ -11,8 +12,6 @@ define ['./model', 'lib/backbone'], (Model) ->
 		@prop 'selectedIndex'
 		
 		constructor: (models, options) ->
-			@model = options.model if options?.model
-			
 			super(models, options)
 			@fields =
 				selected: null
@@ -21,4 +20,7 @@ define ['./model', 'lib/backbone'], (Model) ->
 			@bind 'change:selected', (collection, selected) -> @selectedIndex = @indexOf selected
 			@bind 'change:selectedIndex', (collection, index) -> @selected = @at index
 		
-	
+		
+		query: (field) ->
+			query.select(@models).where(field)
+		

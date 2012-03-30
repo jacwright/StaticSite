@@ -5,7 +5,7 @@ function menuItem(data,index) {
 
   name = "menu-item";
 
-  source = "<li class=\"<%= if data.children.length then 'has-children' %>\">\n\t<h5 class=\"file-name\"><span class=\"icon <%= if data.id.slice(-1) is '/' then 'folder' else 'page' %>\">asdf</span> <%= data.id.replace /\\/$/, '' %></h5>\n\t<% if data.id.slice(-1) isnt '/': %><span class=\"date-modified\">Published: <%= data.lastModified.readable() %></span><% end %>\n</li>\n";
+  source = "<li class=\"<%= if data.children.length then 'has-children' %>\">\n\t<h5 class=\"file-name\"><span class=\"icon <%= data.icon %>\"></span> <%= data.name, '' %></h5>\n\t<% if data.id.slice(-1) isnt '/': %><span class=\"date-modified\">Published: <%= data.lastModified.readable() %></span><% end %>\n</li>\n";
 
   try {
     __line = 1;
@@ -15,9 +15,9 @@ function menuItem(data,index) {
     __lines.push('">\n');
     __line = 2;
     __lines.push('\t<h5 class="file-name"><span class="icon ');
-    __lines.push(this.escape(data.id.slice(-1) === '/' ? 'folder' : 'page'));
-    __lines.push('">asdf</span> ');
-    __lines.push(this.escape(data.id.replace(/\/$/, '')));
+    __lines.push(this.escape(data.icon));
+    __lines.push('"></span> ');
+    __lines.push(this.escape(data.name, ''));
     __lines.push('</h5>\n');
     __line = 3;
     __lines.push('\t');

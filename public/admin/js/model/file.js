@@ -3,8 +3,19 @@
     __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor; child.__super__ = parent.prototype; return child; };
 
   define(['./model', './collection'], function(Model, Collection) {
-    var File, FileCollection, childSort, fileName;
-    fileName = /[^\/]+\/?$/;
+    var File, FileCollection, childSort, extention, fileName, getExtention, icons, onKeyChange;
+    fileName = /([^\/]+)\/?$/;
+    extention = /\.(\w+)$$/;
+    icons = {
+      js: 'script',
+      html: 'html',
+      css: 'css'
+    };
+    getExtention = function(key) {
+      var match;
+      match = key.match(extention);
+      return (match != null ? match[1] : void 0) || '';
+    };
     childSort = function(a, b) {
       a = a.id.toLowerCase();
       if (a.slice(-1) === '/') a = '/' + a;
@@ -16,11 +27,26 @@
         return 1;
       }
     };
+    onKeyChange = function(model, key) {
+      var ext;
+      if (!key) return;
+      model.name = key.match(fileName)[1];
+      ext = getExtention(key);
+      if (icons.hasOwnProperty(ext)) {
+        return model.icon = icons[ext];
+      } else {
+        return delete model.icon;
+      }
+    };
     File = (function(_super) {
 
       __extends(File, _super);
 
+      File.subclasses = [];
+
       File.prototype.idAttribute = 'key';
+
+      File.prototype.icon = 'page';
 
       File.attr('lastModified');
 
@@ -30,12 +56,8 @@
         var _this = this;
         if (attr != null) attr.lastModified = new Date(attr.lastModified);
         File.__super__.constructor.call(this, attr, opts);
-        this.on('change:key', function() {
-          if (!_this.key) return;
-          _this.name = _this.key.match(fileName)[0];
-          return _this.isFolder = _this.id.slice(-1) === '/';
-        });
-        if (attr.key) this.trigger('change:key');
+        this.on('change:key', onKeyChange);
+        if (attr.key) this.trigger('change:key', this, this.id);
         this.children = new FileCollection();
         this.children.on('remove', function(file) {
           return file.parent = null;
@@ -60,6 +82,26 @@
       FileCollection.prototype.model = File;
 
       FileCollection.prototype.comparator = childSort;
+
+      FileCollection.prototype._prepareModel = function(model, options) {
+        var attrs, modelClass;
+        if (options == null) options = {};
+        if (!(model instanceof Model)) {
+          modelClass = this.model;
+          attrs = model;
+          options.collection = this;
+          File.subclasses.some(function(subclass) {
+            if (subclass.match(attrs)) {
+              modelClass = subclass;
+              return true;
+            } else {
+              return false;
+            }
+          });
+          model = new modelClass(attrs, options);
+        }
+        return FileCollection.__super__._prepareModel.call(this, model, options);
+      };
 
       return FileCollection;
 
