@@ -42,36 +42,31 @@ policy" link in the properties and paste this in (be sure to replace "mybucket" 
 Then select the "Website" tab, check "Enabled" and put in "index.html" and "error.html" for the two fields.
 
 From the "Website" tab you'll see the S3 domain you must use to have the website feature. If your bucket is called
-"mywebsite.com" you can point your mywebsite.com domain's DNS to this S3 domain using CNAME to access your S3 website
-from http://mywebsite.com/.
+"www.example.com" you can point your www.example.com domain's DNS to this S3 domain using CNAME to access your S3 website
+from http://www.example.com/.
 
-Finally upload the following files from the src/ folder of your cloned git project to your S3 bucket (set their
-content-type appropriately, e.g. text/html, text/css, text/js):
+Finally upload the contents of the public directory of your cloned git project to your S3 bucket (make them public-read
+and set their content-type appropriately, e.g. text/html, text/css, text/js).
 
-* index.html
-* error.html
-* admin/index.html
-* admin/css/admin.css
-* admin/js/app.js
-* admin/js/login.js
-* admin/login.html
-* admin/index.html
-
-You should be able to go to the url https://s3.amazonaws.com/mybucket/admin/index.html and be presented with the login
+You should be able to go to the url http://www.example.com/admin/ or https://s3.amazonaws.com/www.example.com/admin/ and
+be presented with the login
 page. Click Register and put in your info, then you'll be taken to the blank dashboard page. Later you can come here
 and login with the username/password you registered with. Note that because Amazon only allows GETs for the website URL
-you cannot login to the admin from the same URL you access the website from.
+(www.example.com) you are redirected to https://s3.amazonaws.com/www.example.com/admin/ when you go to the admin
+directory at http://www.example.com/admin/.
 
-You can see [staticsite.org](http://staticsite.org/) set up with the code and if you go to
-[staticsite.org/admin](http://staticsite.org/admin/) you'll be redirected to the correct URL for logging in, though you
+You can see [www.staticsite.org](http://www.staticsite.org/) set up with the code and if you go to
+[www.staticsite.org/admin](http://www.staticsite.org/admin/) you'll be redirected to the correct URL for logging in, though you
 won't be able to register with that bucket.
 
 **Building**
 
-To build the admin.js you need node.js installed, npm, and uglify-js installed. You can get instructions on installing
-[node.js](http://nodejs.org/) from their website, [npm](http://npmjs.org/) from their website, and uglify by calling
-"npm install uglify-js" from the command line.
+To build the project you need node.js installed, npm, and CoffeeScript. You can get instructions on installing
+[node.js](http://nodejs.org/) from their website and [npm](http://npmjs.org/) from their website. To install
+CoffeeScript run `npm install -g coffee-script` with the global flag.
 
-Once everything is installed go to the root of your project and run `./make.sh`
+Once everything is installed go to the root of your project and run `npm install` to install required modules. Then you
+can run `cake make` to compile the coffeescript in the src/ folder, and
+`cake -k aws_key -s aws_secret -b www.example.com make` to compile and upload the files to your bucket.
 
 If you have any problems or issues you're on your own. Sorry. It's still early.
