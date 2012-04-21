@@ -1,0 +1,17 @@
+<% if data.site and app.files.selected is data: %>
+<li class="crumb">
+	<span class="divider">/</span> <%= data.name %>
+</li>
+<% else if data.site: %>
+<li class="crumb">
+	<span class="divider">/</span> <a href="<%= data.url %>"><%= data.name %></a>
+</li>
+<% else if app.files.selected: %>
+<li class="crumb">
+	<a href="<%= data.url %>"><%= data.name %></a>
+</li>
+<% else: %>
+<li class="crumb">
+	<%= data.name %>
+</li>
+<% end %>

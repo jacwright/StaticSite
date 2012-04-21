@@ -4,40 +4,45 @@ define ['./model', './collection', './file', 'lib/s3', './folder', './page'], (M
 	trailingSlash = /\/$/
 	fileName = /[^\/]+\/?$/
 	
-	createFileHierarchy = (files, children) ->
-		lookup = {}
-		files.forEach (file) ->
-			parentId = file.id.replace(fileName, '')
-			lookup[file.id] = file
-			
-			parent = lookup[parentId] or lookup[parentId.replace(trailingSlash, '')]
-			if parent
-				parent.children.add(file)
-			else unless file.id is 'admin/'
-				children.add(file)
-	
-	
 	
 	
 	class Site extends Model
 		
 		@attr 'name'
 		@attr 'creationDate'
+		@prop 'url'
+		icon: 'sitemap'
 		
 		
 		constructor: (attr, opts) ->
 			attr?.creationDate = new Date(attr.creationDate)
 			super(attr, opts)
 			
+			@url = "http://#{@name}/"
 			@bucket = s3.bucket(@name)
-			@files = new File.Collection(@get('files'), comparator: (file) -> file.id.toLowerCase())
+			@_lookup = {}
+			@files = new File.Collection([], comparator: (file) -> file.id.toLowerCase())
 			@children = new File.Collection()
+			
+			@files.on 'add', (file, files) =>
+				# add url info
+				file.site = this
+				file.url = @url + file.id
+				
+				# assign to parent's children collection
+				parentId = file.id.replace(fileName, '')
+				@_lookup[file.id] = file
+				
+				parent = @_lookup[parentId] or @_lookup[parentId.replace(trailingSlash, '')]
+				if parent
+					parent.children.add(file)
+				else unless file.id is 'admin/'
+					@children.add(file)
 		
 		
 		fetch: (options) ->
 			@bucket.list().then (files) =>
 				@files.add files
-				createFileHierarchy(@files, @children)
 				@
 		
 	

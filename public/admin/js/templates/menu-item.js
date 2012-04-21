@@ -5,19 +5,21 @@ function menuItem(data,index) {
 
   name = "menu-item";
 
-  source = "<li class=\"<%= if data.children.length then 'has-children' %>\">\n\t<h5 class=\"file-name\"><span class=\"icon <%= data.icon %>\"></span> <%= data.name, '' %></h5>\n\t<% if data.id.slice(-1) isnt '/': %><span class=\"date-modified\">Published: <%= data.lastModified.readable() %></span><% end %>\n</li>\n";
+  source = "<li data-id=\"<%= data.id %>\" class=\"<%= if data.children.length then 'has-children' %>\">\n\t<h5 class=\"file-name\"><span class=\"icon <%= data.icon %>\"></span> <%= data.name %></h5>\n\t<% if data.id.slice(-1) isnt '/': %><span class=\"date-modified\">Published: <%= data.lastModified.readable() %></span><% end %>\n</li>\n";
 
   try {
     __line = 1;
     __lines = [];
-    __lines.push('<li class="');
+    __lines.push('<li data-id="');
+    __lines.push(this.escape(data.id));
+    __lines.push('" class="');
     __lines.push(this.escape(data.children.length ? 'has-children' : void 0));
     __lines.push('">\n');
     __line = 2;
     __lines.push('\t<h5 class="file-name"><span class="icon ');
     __lines.push(this.escape(data.icon));
     __lines.push('"></span> ');
-    __lines.push(this.escape(data.name, ''));
+    __lines.push(this.escape(data.name));
     __lines.push('</h5>\n');
     __line = 3;
     __lines.push('\t');

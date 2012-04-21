@@ -38,7 +38,7 @@
 </div>
 
 <div id="container" class="container-fluid">
-	<div id="sidebar" class="pod">
+	<div id="sidebar" unselectable="on" class="pod unselectable">
 		<div class="btn-toolbar">
 			<div class="btn-group">
 				<button class="btn" style="overflow: hidden">
@@ -49,9 +49,11 @@
 					<span class="caret"></span>
 				</button>
 				<ul class="dropdown-menu">
-					<li id="new-file"><a href="#"><span class="icon page-add"></span> Add page</a></li>
-					<li id="new-page"><a href="#"><span class="icon layout-add"></span> Add page from template</a></li>
-					<li id="new-folder"><a href="#"><span class="icon folder-add"></span> Add folder</a></li>
+					<li id="new-page"><a href="#"><span class="icon layout-add"></span> <strong>Page</strong></a></li>
+					<li id="new-folder"><a href="#"><span class="icon folder-add"></span> <strong>Folder</strong></a></li>
+					<li id="new-html"><a href="#"><span class="icon html-add"></span> <strong>Document</strong></a></li>
+					<li id="new-css"><a href="#"><span class="icon css-add"></span> <strong>Stylesheet</strong></a></li>
+					<li id="new-js"><a href="#"><span class="icon script-add"></span> <strong>Script</strong></a></li>
 				</ul>
 			</div>
 			<div class="btn-group">
@@ -74,20 +76,13 @@
 						<li id="new-site"><a href="#"><span class="icon sitemap-add"></span> New...</a></li>
 					</ul>
 				</div>
-				<a id="selected-site" href="/"></a>
 			</li>
-			<!--<li>-->
-				<!--<span class="divider">/</span> <a href="/about-us">about-us</a>-->
-			<!--</li>-->
-			<!--<li class="active">-->
-				<!--<span class="divider">/</span> jobs-->
-			<!--</li>-->
 		</ul>
 	</div>
 	<div id="main">
 		<div id="editors" class="pod">
 			<!--<div id="code-editor"></div>-->
-			<!--<iframe id="frame"></iframe>-->
+			<iframe id="frame"></iframe>
 		</div>
 	</div>
 </div>

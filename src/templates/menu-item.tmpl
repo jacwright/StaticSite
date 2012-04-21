@@ -1,4 +1,4 @@
-<li class="<%= if data.children.length then 'has-children' %>">
-	<h5 class="file-name"><span class="icon <%= data.icon %>"></span> <%= data.name, '' %></h5>
+<li data-id="<%= data.id %>" class="<%= if data.children.length then 'has-children' %>">
+	<h5 class="file-name"><span class="icon <%= data.icon %>"></span> <%= data.name %></h5>
 	<% if data.id.slice(-1) isnt '/': %><span class="date-modified">Published: <%= data.lastModified.readable() %></span><% end %>
 </li>

@@ -28,9 +28,10 @@
       }
     };
     onKeyChange = function(model, key) {
-      var ext;
+      var ext, _ref;
       if (!key) return;
       model.name = key.match(fileName)[1];
+      model.url = ((_ref = model.site) != null ? _ref.url : void 0) + key;
       ext = getExtention(key);
       if (icons.hasOwnProperty(ext)) {
         return model.icon = icons[ext];
@@ -51,6 +52,8 @@
       File.attr('lastModified');
 
       File.prop('name');
+
+      File.prop('url');
 
       function File(attr, opts) {
         var _this = this;

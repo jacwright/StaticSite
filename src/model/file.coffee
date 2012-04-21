@@ -25,6 +25,7 @@ define ['./model', './collection'], (Model, Collection) ->
 	onKeyChange = (model, key) ->
 		return unless key
 		model.name = key.match(fileName)[1]
+		model.url = model.site?.url + key
 		ext = getExtention(key)
 		if icons.hasOwnProperty(ext)
 			model.icon = icons[ext]
@@ -42,6 +43,7 @@ define ['./model', './collection'], (Model, Collection) ->
 		
 		@attr 'lastModified'
 		@prop 'name'
+		@prop 'url'
 		
 		constructor: (attr, opts) ->
 			attr?.lastModified = new Date(attr.lastModified)

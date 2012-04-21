@@ -9,13 +9,13 @@ define ['lib/backbone'], (backbone) ->
 			if opts.textOnly
 				elem = data.map (data, index) ->
 					opts.index = index
-					get(file, data, opts)
+					get(templateFunction, data, opts)
 				return elem.join('')
 			else
 				elem = []
 				data.forEach (data, index) ->
 					opts.index = index
-					elem.push get(file, data, opts).detach().get().pop()
+					elem.push get(templateFunction, data, opts).detach().get().pop()
 				return $ elem
 		else
 			html = templateFunction(data, opts.index)

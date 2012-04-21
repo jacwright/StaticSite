@@ -57,7 +57,7 @@ exports.compile = compile = (name, source, opts = {}) ->
 			else if code is 'end'
 				indent = indent.slice(0, -1)
 			else
-				indent = indent.slice(0, -1) if code.split(/\s+/).shift() is 'else'
+				indent = indent.slice(0, -1) if code.split(/[\s:]+/).shift() is 'else'
 				newlineReplace = if opts.optimize then "\n#{indent}" else (match) -> "\n#{indent}__line = #{++lineNumber}\n#{indent}"
 				code = code.replace(newline, "\n#{indent}")
 				func.push("#{indent}#{code.replace /:$/, ''}")

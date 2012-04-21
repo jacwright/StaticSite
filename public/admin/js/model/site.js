@@ -3,24 +3,9 @@
     __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor; child.__super__ = parent.prototype; return child; };
 
   define(['./model', './collection', './file', 'lib/s3', './folder', './page'], function(Model, Collection, File, s3) {
-    var Site, SiteCollection, createFileHierarchy, fileName, trailingSlash;
+    var Site, SiteCollection, fileName, trailingSlash;
     trailingSlash = /\/$/;
     fileName = /[^\/]+\/?$/;
-    createFileHierarchy = function(files, children) {
-      var lookup;
-      lookup = {};
-      return files.forEach(function(file) {
-        var parent, parentId;
-        parentId = file.id.replace(fileName, '');
-        lookup[file.id] = file;
-        parent = lookup[parentId] || lookup[parentId.replace(trailingSlash, '')];
-        if (parent) {
-          return parent.children.add(file);
-        } else if (file.id !== 'admin/') {
-          return children.add(file);
-        }
-      });
-    };
     Site = (function(_super) {
 
       __extends(Site, _super);
@@ -29,23 +14,42 @@
 
       Site.attr('creationDate');
 
+      Site.prop('url');
+
+      Site.prototype.icon = 'sitemap';
+
       function Site(attr, opts) {
+        var _this = this;
         if (attr != null) attr.creationDate = new Date(attr.creationDate);
         Site.__super__.constructor.call(this, attr, opts);
+        this.url = "http://" + this.name + "/";
         this.bucket = s3.bucket(this.name);
-        this.files = new File.Collection(this.get('files'), {
+        this._lookup = {};
+        this.files = new File.Collection([], {
           comparator: function(file) {
             return file.id.toLowerCase();
           }
         });
         this.children = new File.Collection();
+        this.files.on('add', function(file, files) {
+          var parent, parentId;
+          file.site = _this;
+          file.url = _this.url + file.id;
+          parentId = file.id.replace(fileName, '');
+          _this._lookup[file.id] = file;
+          parent = _this._lookup[parentId] || _this._lookup[parentId.replace(trailingSlash, '')];
+          if (parent) {
+            return parent.children.add(file);
+          } else if (file.id !== 'admin/') {
+            return _this.children.add(file);
+          }
+        });
       }
 
       Site.prototype.fetch = function(options) {
         var _this = this;
         return this.bucket.list().then(function(files) {
           _this.files.add(files);
-          createFileHierarchy(_this.files, _this.children);
           return _this;
         });
       };

@@ -12,14 +12,14 @@
         if (opts.textOnly) {
           elem = data.map(function(data, index) {
             opts.index = index;
-            return get(file, data, opts);
+            return get(templateFunction, data, opts);
           });
           return elem.join('');
         } else {
           elem = [];
           data.forEach(function(data, index) {
             opts.index = index;
-            return elem.push(get(file, data, opts).detach().get().pop());
+            return elem.push(get(templateFunction, data, opts).detach().get().pop());
           });
           return $(elem);
         }

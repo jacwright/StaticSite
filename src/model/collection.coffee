@@ -16,11 +16,17 @@ define ['./model', 'lib/array-query', 'lib/backbone'], (Model, query) ->
 			@fields =
 				selected: null
 				selectedIndex: -1
-			
-			@bind 'change:selected', (collection, selected) -> @selectedIndex = @indexOf selected
-			@bind 'change:selectedIndex', (collection, index) -> @selected = @at index
 		
 		
 		query: (field) ->
 			query.select(@models).where(field)
 		
+		
+		trigger: (event, args...) ->
+			super(event, args...)
+			if args[args.length - 1] isnt 'cloned'
+				if event is 'change:selected' 
+					@selectedIndex = @indexOf @selected
+				else if event is 'change:selectedIndex'
+					@selected = @at @selectedIndex
+			

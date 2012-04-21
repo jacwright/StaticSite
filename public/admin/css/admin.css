@@ -2,12 +2,21 @@ html, body {
 	height: 100%;
 	background: #6F727A url(../img/linen.png);
 }
+.unselectable {
+	-webkit-touch-callout: none;
+	-webkit-user-select: none;
+	-khtml-user-select: none;
+	-moz-user-select: none;
+	-ms-user-select: none;
+	user-select: none;
+}
 #container {
 	position: absolute;
 	top: 40px;
 	bottom: 0;
 	left: 0;
 	right: 0;
+	padding: 0 10px;
 }
 .pod {
 	border: none;
@@ -18,8 +27,8 @@ html, body {
 #sidebar {
 	position: absolute;
 	top: 54px;
-	bottom: 20px;
-	left: 20px;
+	bottom: 10px;
+	left: 10px;
 	width: 260px;
 }
 #menu {
@@ -38,9 +47,9 @@ html, body {
 #main {
 	position: absolute;
 	top: 54px;
-	bottom: 20px;
-	left: 300px;
-	right: 20px;
+	bottom: 10px;
+	left: 280px;
+	right: 10px;
 }
 #editors {
 	position: absolute;
