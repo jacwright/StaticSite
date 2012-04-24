@@ -50,21 +50,16 @@ define ['./date', './crypto', './promises'], (_date_, crypto, promises) ->
 			
 			
 			headers['x-amz-date'] = date
-			
-			if options.acl
-				headers['x-amz-acl'] = options.acl
-				amz.push('x-amz-acl:' + options.acl)
-			
-			for name, value of headers
-				if name.slice(0, 6) is 'x-amz-'
-					amz.push(name + ':' + value)
+			headers['x-amz-acl'] = options.acl if options.acl
 			
 			if options.meta
-				meta = options.meta
-				for own name, value of meta
+				for own name, value of options.meta
 					value = value.replace(/\n/g, ' ')
-					headers['x-amz-meta-' + name] = value
-					amz.push('x-amz-meta-' + name + ':' + value)
+					headers['x-amz-meta-' + name.toLowerCase()] = value
+			
+			for own name, value of headers
+				if name.slice(0, 6) is 'x-amz-'
+					amz.push(name + ':' + value)
 			
 			
 			unless options.anonymous
@@ -80,7 +75,7 @@ define ['./date', './crypto', './promises'], (_date_, crypto, promises) ->
 				].join('\n')
 				
 				signature = base64.encrypt hmac(sha1, utf8.encode(stringToSign), secret, asBytes: true)
-				headers['Authorization'] = 'AWS ' + key + ':' + signature;
+				headers['authorization'] = 'AWS ' + key + ':' + signature;
 			
 			request =
 				type: method
