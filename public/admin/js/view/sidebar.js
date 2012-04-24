@@ -111,10 +111,6 @@
         file = $(this).closest('li.menu-item').data('model');
         return editName(file);
       });
-      $('#delete-file').click(function() {
-        var _ref;
-        return (_ref = app.children.selected) != null ? _ref.destroy() : void 0;
-      });
       return $('#new-folder').click(function(event) {
         var file, name;
         event.preventDefault();

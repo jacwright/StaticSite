@@ -92,10 +92,7 @@ require ['app', 'model/file', 'model/folder', 'templates/menu-item', 'templates/
 		$('#menu').delegate '.actions .rename', 'click', ->
 			file = $(this).closest('li.menu-item').data('model')
 			editName file
-				
 		
-		$('#delete-file').click ->
-			app.children.selected?.destroy()
 		
 		
 		$('#new-folder').click (event) ->

@@ -40,13 +40,13 @@ compile = (file) ->
 	if ext is 'coffee'
 		try
 			fs.writeFileSync dest, coffee.compile(fs.readFileSync(file, 'utf8'))
-			console.log 'compiled:', ansi.green, dest, ansi.none
+			console.log 'compiled:', ansi.green, file, ansi.none
 		catch e
 			console.error 'error:', ansi.red, e.message, ansi.none
 	else if ext is 'tmpl'
 		name = file.split('/').pop().split('.').shift()
 		fs.writeFileSync dest, templater.compile(name, fs.readFileSync(file, 'utf8'))
-		console.log 'compiled:', ansi.green, dest, ansi.none
+		console.log 'compiled:', ansi.green, file, ansi.none
 
 
 remove = (file) ->
