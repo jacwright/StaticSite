@@ -2,6 +2,10 @@
 define ['./model', 'lib/array-query', 'lib/backbone'], (Model, query) ->
 	
 	
+	proxy = (event, args...) ->
+		@trigger event, args...
+	
+	
 	class Collection extends Backbone.Collection
 		
 		model: Model
@@ -16,6 +20,33 @@ define ['./model', 'lib/array-query', 'lib/backbone'], (Model, query) ->
 			@fields =
 				selected: null
 				selectedIndex: -1
+		
+		
+		become: (collection) ->
+			@_became = collection
+			
+			# make the models arrays the same so they stay in sync
+			@models = collection.models
+			@fields = collection.fields
+			@length = collection.length
+			@_byId = collection._byId
+			@_byCid = collection._byCid
+			@add = collection.add.bind(collection)
+			@remove = collection.remove.bind(collection)
+			
+			# proxy events across
+			collection.on 'all', proxy, this
+			
+			# update listeners that the collection is new
+			@trigger 'reset', @, {}
+		
+		unbecome: ->
+			collection = @_became
+			if collection
+				delete @add
+				delete @remove
+				collection.off 'all', proxy, this
+			
 		
 		
 		query: (field) ->

@@ -73,30 +73,30 @@ html, body {
 #menu {
 	overflow-y: scroll;
 }
-#menu ul {
+#menu > ul {
 	list-style: none;
 	margin: 0;
 	padding: 0;
 }
-#menu li {
+#menu > ul > li {
 	cursor: default;
 	padding: 6px 10px;
 	border: 1px solid transparent;
 	border-left: none;
 	border-right: none;
 }
-#menu li:hover {
+#menu > ul > li:hover {
 	background-color: #f6f6f6;
 }
-#menu li.active {
+#menu > ul > li.active {
 	background-color: #f6f6f6;
 	border-color: #ddd;
 }
-#menu li:first-child {
+#menu > ul > li:first-child {
 	border-top: none;
 	border-radius: 3px 3px 0 0;
 }
-#menu li:last-child {
+#menu > ul > li:last-child {
 	margin-bottom: 100px;
 }
 #breadcrumbs > ul {
@@ -125,4 +125,80 @@ html, body {
 #menu .date-modified {
 	color: #999;
 	font-size: 11px;
+}
+.menu-item {
+	position: relative;
+}
+.file-name input {
+	font: inherit;
+	color: inherit;
+	position: absolute;
+	width: 212px;
+	padding: 1px 0;
+	top: 4px;
+	left: 27px;
+}
+#menu .actions {
+	display: none;
+	font-weight: normal;
+}
+#menu .actions a.dropdown-toggle {
+	background: none;
+}
+#menu > ul > li:hover .actions, #menu > ul > li .actions.open {
+	display: inline;
+}
+#menu .delete a.confirm {
+	color: #c00;
+}
+#menu .delete a.cancel {
+	color: #005580;
+}
+#menu .delete .confirmation a {
+	display: inline;
+	padding: 0;
+	text-decoration: underline;
+}
+#menu .delete .confirmation {
+	display: none;
+	padding: 3px 15px;
+	clear: both;
+	line-height: 18px;
+	color: #333;
+	white-space: nowrap;
+	font-weight: normal;
+}
+#menu .delete.confirm .confirmation {
+	display:block;
+}
+#menu .delete.confirm .action {
+	display: none;
+}
+.actions .dropdown-menu {
+	margin-right: -7px;
+	margin-top: 6px;
+	-webkit-border-radius: 4px;
+	-moz-border-radius: 4px;
+	border-radius: 4px;
+}
+.actions .dropdown-menu:before {
+  content: '';
+  display: inline-block;
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-bottom: 7px solid #ccc;
+  border-bottom-color: rgba(0, 0, 0, 0.2);
+  position: absolute;
+  top: -7px;
+  right: 7px;
+}
+.actions .dropdown-menu:after {
+  content: '';
+  display: inline-block;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-bottom: 6px solid #ffffff;
+  position: absolute;
+  top: -6px;
+  right: 8px;
 }

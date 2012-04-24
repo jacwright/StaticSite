@@ -1,6 +1,6 @@
 (function() {
 
-  define(['app', 'templates/site-menu-item', 'templates/breadcrumb', 'view/sidebar'], function(app, siteMenuItem, breadcrumb) {
+  define(['app', 'templates/site-menu-item', 'templates/breadcrumb', 'view/sidebar', 'view/content'], function(app, siteMenuItem, breadcrumb) {
     var getBreadcrumbs, updateCrumbs;
     getBreadcrumbs = function(selected) {
       var crumbs;
@@ -28,11 +28,17 @@
     });
     return $(function() {
       $('body').fadeIn();
-      return $('#breadcrumbs').delegate('li.crumb a', 'click', function(event) {
+      $('#breadcrumbs').delegate('li.crumb a', 'click', function(event) {
         var fileId;
         event.preventDefault();
         fileId = $(this).attr('href').replace(app.sites.selected.url, '');
         return app.files.selected = app.files.get(fileId);
+      });
+      return $('#site-list').delegate('li', 'click', function(event) {
+        var site;
+        event.preventDefault();
+        site = $(this).data('model');
+        if (site) return app.sites.selected = site;
       });
     });
   });

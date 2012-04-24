@@ -2,9 +2,9 @@
   var __hasProp = Object.prototype.hasOwnProperty,
     __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor; child.__super__ = parent.prototype; return child; };
 
-  define(['./model', './collection'], function(Model, Collection) {
-    var File, FileCollection, childSort, extention, fileName, getExtention, icons, onKeyChange;
-    fileName = /([^\/]+)\/?$/;
+  define(['./model', './collection', 'lib/promises'], function(Model, Collection, promises) {
+    var File, FileCollection, childSort, escapeRegex, extention, fileName, getExtention, icons, onKeyChange;
+    fileName = /([^\/]+)(\/)?$/;
     extention = /\.(\w+)$$/;
     icons = {
       js: 'script',
@@ -15,6 +15,9 @@
       var match;
       match = key.match(extention);
       return (match != null ? match[1] : void 0) || '';
+    };
+    escapeRegex = function(text) {
+      return text.replace(/([\\\*\+\?\|\{\[\(\)\^\$\.\#])/g, '\\$1');
     };
     childSort = function(a, b) {
       a = a.id.toLowerCase();
@@ -49,11 +52,15 @@
 
       File.prototype.icon = 'page';
 
+      File.attr('key');
+
       File.attr('lastModified');
 
       File.prop('name');
 
       File.prop('url');
+
+      File.prop('content');
 
       function File(attr, opts) {
         var _this = this;
@@ -70,6 +77,74 @@
           return file.parent = _this;
         });
       }
+
+      File.prototype.keyFromName = function(name) {
+        return this.id.replace(fileName, name + '$2');
+      };
+
+      File.prototype.copy = function(newKey) {
+        var oldKey, operations,
+          _this = this;
+        oldKey = new RegExp('^' + escapeRegex(this.id));
+        operations = this.children.map(function(file) {
+          return file.copy(file.id.replace(oldKey, newKey));
+        });
+        operations.push(this.site.bucket.copy(this.id, newKey));
+        return promises.whenAll(operations).then(function() {
+          return _this;
+        });
+      };
+
+      File.prototype.destroy = function(options) {
+        var operations,
+          _this = this;
+        operations = this.children.map(function(file) {
+          return file.destroy();
+        });
+        operations.push(this.site.bucket.destroy(this.id));
+        this.trigger('destroy', this, this.collection, options);
+        return promises.whenAll(operations).then(function() {
+          return _this;
+        });
+      };
+
+      File.prototype.rename = function(newKey) {
+        var getKeys, keysToDelete,
+          _this = this;
+        getKeys = function(file) {
+          var keys;
+          keys = [];
+          file.children.forEach(function(file) {
+            return keys = keys.concat(getKeys(file));
+          });
+          keys.push(file.id);
+          return keys;
+        };
+        keysToDelete = getKeys(this);
+        this.copy(newKey).then(function() {
+          var operations;
+          operations = keysToDelete.map(function(key) {
+            return _this.site.bucket.destroy(key);
+          });
+          return promises.whenAll(operations).then(function() {
+            return _this;
+          });
+        });
+        return this.set('key', newKey);
+      };
+
+      File.prototype.save = function(options) {
+        if (this.content === void 0) return;
+        return this.site.bucket.put(this.id, this.content);
+      };
+
+      File.prototype.fetch = function(options) {
+        var _this = this;
+        return this.site.bucket.get(this.id).then(function(content) {
+          _this.content = content;
+          return _this;
+        });
+      };
 
       return File;
 

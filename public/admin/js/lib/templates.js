@@ -2,10 +2,10 @@
   var __hasProp = Object.prototype.hasOwnProperty;
 
   define(['lib/backbone'], function(backbone) {
-    var become, get, helpers, linkify, module;
+    var become, get, getOnChange, helpers, linkify, module, superCleanData;
     module = {};
     module.get = get = function(templateFunction, data, opts) {
-      var elem, html;
+      var elem, html, onChange;
       if (data == null) data = {};
       if (opts == null) opts = {};
       if (data instanceof Array || (Backbone && data instanceof Backbone.Collection)) {
@@ -36,12 +36,29 @@
           }
         });
         if (Backbone && data instanceof Backbone.Model && !opts.unbound) {
-          data.bind('change', function() {
+          onChange = function() {
             return elem = elem.replaceSilently(templateFunction(data, opts.index));
+          };
+          data.bind('change', onChange);
+          elem.on('removing', function() {
+            return data.unbind('change', onChange);
           });
         }
         return elem;
       }
+    };
+    superCleanData = $.cleanData;
+    $.cleanData = function(elems) {
+      var elem, id, _i, _len, _ref, _ref2;
+      for (_i = 0, _len = elems.length; _i < _len; _i++) {
+        elem = elems[_i];
+        if (elem.nodeName && jQuery.noData[elem.nodeName.toLowerCase()]) continue;
+        id = elem[jQuery.expando];
+        if (id && ((_ref = jQuery.cache[id]) != null ? (_ref2 = _ref.events) != null ? _ref2.removing : void 0 : void 0)) {
+          $(elem).trigger('removing');
+        }
+      }
+      return superCleanData(elems);
     };
     $.fn.replaceSilently = function(elem) {
       var source, target;
@@ -69,6 +86,12 @@
         }
         return _results;
       }
+    };
+    getOnChange = function(expando) {
+      return function() {
+        var elem;
+        return elem = elem.replaceSilently(templateFunction(data, opts.index));
+      };
     };
     module.helpers = helpers = {
       escape: function(value) {

@@ -29,9 +29,23 @@ define ['lib/backbone'], (backbone) ->
 					get(sub.attr 'data-template', data[propertyName]).appendTo(sub)
 			
 			if Backbone and data instanceof Backbone.Model and not opts.unbound
-				data.bind 'change', ->
-					elem = elem.replaceSilently(templateFunction(data, opts.index))
+				onChange = -> elem = elem.replaceSilently templateFunction(data, opts.index)
+				
+				data.bind 'change', onChange
+				
+				elem.on 'removing', -> data.unbind 'change', onChange
 			elem
+	
+	
+	# allow us to clean up before an element is removed
+	superCleanData = $.cleanData
+	$.cleanData = (elems) ->
+		for elem in elems
+			continue if elem.nodeName and jQuery.noData[elem.nodeName.toLowerCase()]
+			id = elem[ jQuery.expando ]
+			$(elem).trigger('removing') if id and jQuery.cache[id]?.events?.removing
+		
+		superCleanData elems
 	
 	
 	$.fn.replaceSilently = (elem) ->
@@ -54,6 +68,9 @@ define ['lib/backbone'], (backbone) ->
 				else
 					target.attachEvent("on", type, internals.handle)
 	
+	getOnChange = (expando) ->
+		->
+			elem = elem.replaceSilently(templateFunction(data, opts.index))
 	
 	## HELPERS
 	

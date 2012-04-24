@@ -50,12 +50,14 @@ define ['./date', './crypto', './promises'], (_date_, crypto, promises) ->
 			
 			
 			headers['x-amz-date'] = date
-			amz.push('x-amz-date:' + date)
 			
 			if options.acl
 				headers['x-amz-acl'] = options.acl
 				amz.push('x-amz-acl:' + options.acl)
 			
+			for name, value of headers
+				if name.slice(0, 6) is 'x-amz-'
+					amz.push(name + ':' + value)
 			
 			if options.meta
 				meta = options.meta
@@ -142,6 +144,16 @@ define ['./date', './crypto', './promises'], (_date_, crypto, promises) ->
 			
 			s3.load(options)
 		
+		copy: (url, newUrl, options = {}) ->
+			url = @url + url
+			newUrl = @url + newUrl
+			options = $.extend options,
+				method: 'put'
+				url: newUrl
+				headers:
+					'x-amz-copy-source': url
+			
+			s3.load(options)
 		
 		destroy: (url, options) ->
 			url = this.url + url

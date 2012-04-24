@@ -1,4 +1,21 @@
-<li data-id="<%= data.id %>" class="<%= if data.children.length then 'has-children' %>">
-	<h5 class="file-name"><span class="icon <%= data.icon %>"></span> <%= data.name %></h5>
+<li data-id="<%= data.cid %>" class="menu-item<%= if data.children.length then ' has-children' %><%= if data.site.children.selected is data then ' active' %>">
+	<h5 class="file-name">
+		<span class="icon <%= data.icon %>"></span>
+		<%= data.name %>
+		<div class="actions pull-right dropdown">
+			<a class="dropdown-toggle" data-toggle="dropdown" href="#">
+				<span class="icon cog"></span>
+			</a>
+			<ul class="dropdown-menu">
+				<li class="delete">
+					<a class="action" href="#">Delete</a>
+					<span class="confirmation">
+						<strong>Delete?</strong> <a class="confirm" href="#">Yes</a> or <a class="cancel" href="#">Cancel</a>
+					</span>
+				</li>
+				<li><a class="rename" href="#">Rename</a></li>
+			</ul>
+		</div>
+	</h5>
 	<% if data.id.slice(-1) isnt '/': %><span class="date-modified">Published: <%= data.lastModified.readable() %></span><% end %>
 </li>

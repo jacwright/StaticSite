@@ -5,6 +5,10 @@ define ['./file'], (File) ->
 		icon: 'folder'
 		isFolder: true
 		
+		constructor: (args...) ->
+			super(args...)
+			@content = ''
+		
 		@match: (attr) ->
 			attr.key.slice(-1) is '/'
 		

@@ -62,10 +62,13 @@
           }));
         }
         headers['x-amz-date'] = date;
-        amz.push('x-amz-date:' + date);
         if (options.acl) {
           headers['x-amz-acl'] = options.acl;
           amz.push('x-amz-acl:' + options.acl);
+        }
+        for (name in headers) {
+          value = headers[name];
+          if (name.slice(0, 6) === 'x-amz-') amz.push(name + ':' + value);
         }
         if (options.meta) {
           meta = options.meta;
@@ -152,6 +155,20 @@
           method: 'put',
           url: url,
           data: data
+        });
+        return s3.load(options);
+      };
+
+      Bucket.prototype.copy = function(url, newUrl, options) {
+        if (options == null) options = {};
+        url = this.url + url;
+        newUrl = this.url + newUrl;
+        options = $.extend(options, {
+          method: 'put',
+          url: newUrl,
+          headers: {
+            'x-amz-copy-source': url
+          }
         });
         return s3.load(options);
       };

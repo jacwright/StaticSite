@@ -1,7 +1,7 @@
 
-define ['./model', './collection'], (Model, Collection) ->
+define ['./model', './collection', 'lib/promises'], (Model, Collection, promises) ->
 	
-	fileName = /([^\/]+)\/?$/
+	fileName = /([^\/]+)(\/)?$/
 	extention = /\.(\w+)$$/
 	icons =
 		js: 'script'
@@ -11,6 +11,9 @@ define ['./model', './collection'], (Model, Collection) ->
 	getExtention = (key) ->
 		match = key.match extention
 		return match?[1] or ''
+	
+	escapeRegex = (text) ->
+		text.replace /([\\\*\+\?\|\{\[\(\)\^\$\.\#])/g, '\\$1'
 	
 	childSort = (a, b) ->
 		a = a.id.toLowerCase()
@@ -41,9 +44,11 @@ define ['./model', './collection'], (Model, Collection) ->
 		idAttribute: 'key'
 		icon: 'page'
 		
+		@attr 'key'
 		@attr 'lastModified'
 		@prop 'name'
 		@prop 'url'
+		@prop 'content'
 		
 		constructor: (attr, opts) ->
 			attr?.lastModified = new Date(attr.lastModified)
@@ -59,6 +64,58 @@ define ['./model', './collection'], (Model, Collection) ->
 			@children.on 'add', (file) =>
 				file.parent.remove(file) if file.parent
 				file.parent = this
+		
+		
+		keyFromName: (name) -> @id.replace fileName, name + '$2'
+		
+		
+		copy: (newKey) ->
+			# recursively copy all children and this to the new name
+			oldKey = new RegExp('^' + escapeRegex @id)
+			operations = @children.map (file) ->
+				file.copy file.id.replace oldKey, newKey
+			
+			operations.push @site.bucket.copy @id, newKey
+			
+			promises.whenAll(operations).then => this
+		
+		
+		destroy: (options) ->
+			operations = @children.map (file) -> file.destroy()
+			operations.push @site.bucket.destroy @id
+			@trigger 'destroy', this, this.collection, options
+			
+			promises.whenAll(operations).then => this
+		
+		
+		rename: (newKey) ->
+			getKeys = (file) ->
+				keys = []
+				file.children.forEach (file) ->
+					keys = keys.concat getKeys(file)
+				keys.push file.id
+				keys
+							
+			keysToDelete = getKeys(this)
+			
+			# recursively copy all children and this to the new name, once done delete all old files
+			@copy(newKey).then =>
+				operations = keysToDelete.map (key) => @site.bucket.destroy key
+				promises.whenAll(operations).then => this
+			
+			@set 'key', newKey
+			
+		
+		save: (options) ->
+			return if @content is undefined
+			@site.bucket.put(@id, @content)
+			
+		
+		
+		fetch: (options) ->
+			@site.bucket.get(@id).then (content) =>
+				@content = content
+				@
 	
 	
 	

@@ -36,10 +36,12 @@ define ['lib/promises', 'lib/backbone'], (promises) ->
 			@def property,
 				get: -> @fields[property]
 				set: (value) ->
+					value ?= null
 					oldValue = @fields[property]
 					return if value is oldValue
 					@fields[property] = value
 					@trigger 'change:' + property, this, value, oldValue: oldValue
+					@trigger 'change', this, {}
 		
 		
 	

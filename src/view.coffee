@@ -1,5 +1,5 @@
 
-define ['app', 'templates/site-menu-item', 'templates/breadcrumb', 'view/sidebar'], (app, siteMenuItem, breadcrumb) ->
+define ['app', 'templates/site-menu-item', 'templates/breadcrumb', 'view/sidebar', 'view/content'], (app, siteMenuItem, breadcrumb) ->
 	
 	
 	getBreadcrumbs = (selected) ->
@@ -37,4 +37,10 @@ define ['app', 'templates/site-menu-item', 'templates/breadcrumb', 'view/sidebar
 			event.preventDefault()
 			fileId = $(this).attr('href').replace app.sites.selected.url, ''
 			app.files.selected = app.files.get fileId
+		
+		$('#site-list').delegate 'li', 'click', (event) ->
+			event.preventDefault()
+			site = $(this).data('model')
+			if site
+				app.sites.selected = site
 	

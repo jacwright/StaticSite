@@ -61,8 +61,8 @@ remove = (file) ->
 
 
 handleS3Result = (cb, err, res) ->
-	if error
-		console.error ansi.red, error, ansi.none
+	if err
+		console.error ansi.red, err, ansi.none
 	else if res.statusCode isnt 200 and res.statusCode isnt 204
 		res.setEncoding('utf8')
 		error = ''

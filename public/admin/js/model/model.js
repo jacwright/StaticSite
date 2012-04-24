@@ -53,12 +53,14 @@
           },
           set: function(value) {
             var oldValue;
+            if (value == null) value = null;
             oldValue = this.fields[property];
             if (value === oldValue) return;
             this.fields[property] = value;
-            return this.trigger('change:' + property, this, value, {
+            this.trigger('change:' + property, this, value, {
               oldValue: oldValue
             });
+            return this.trigger('change', this, {});
           }
         });
       };
