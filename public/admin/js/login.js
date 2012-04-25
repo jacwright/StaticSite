@@ -2,12 +2,16 @@
 
   require(['app/auth', 'util/admin-redirect'], function(auth) {
     return $(function() {
+      var siteName;
       $('body').fadeIn();
       $('div.alert').hide();
-      $('.cancel').click(function(event) {
-        event.preventDefault();
-        return history.back();
-      });
+      siteName = location.pathname.split('/')[1];
+      if (siteName === 'websights') {
+        $('a.cancel').remove();
+      } else {
+        $('a.cancel').attr('href', 'http://' + siteName + '/');
+        $('#site-name').text(siteName);
+      }
       $('#username').focus();
       $('#loginform').submit(function(event) {
         var password, rememberme, username;

@@ -45,8 +45,13 @@ html, body {
 sessionStorage.removeItem('creds');
 localStorage.removeItem('creds');
 $(function() {
-	var siteurl = 'http://' + location.pathname.split('/')[1] + '/';
-	$('a.siteurl').attr('href', siteurl);
+	var siteName = location.pathname.split('/')[1];
+	if (siteName === 'websights') {
+		$('#local-site').remove();
+	} else {
+		$('a.siteurl').attr('href', 'http://' + siteName + '/');
+		$('#site-name').text(siteName);
+	}
 });
 </script>
 </head>
@@ -54,9 +59,9 @@ $(function() {
 <div class="container">
 	<div class="content">
 		<div class="page-header">
-			<h1>Example Site <small>You are now signed out</small></h1>
+			<h1><span id="site-name">Websights</span> <small>You are now signed out</small></h1>
 		</div>
-		<p>You have been signed out. You may <a href="login.html">sign back in</a>, or <a class="siteurl" href="#">go to the website</a>.</p>
+		<p>You have been signed out. You may <a href="login.html">sign back in</a><span id="local-site">, or <a class="siteurl" href="#">go to the website</a></span>.</p>
 	</div>
 </div>
 </body>

@@ -5,10 +5,13 @@ require ['app/auth', 'util/admin-redirect'], (auth) ->
 	$ ->
 		$('body').fadeIn()
 		$('div.alert').hide()
-	
-		$('.cancel').click (event) ->
-			event.preventDefault()
-			history.back()
+		
+		siteName = location.pathname.split('/')[1];
+		if siteName is 'websights'
+			$('a.cancel').remove()
+		else
+			$('a.cancel').attr('href', 'http://' + siteName + '/');
+			$('#site-name').text(siteName);
 		
 		
 		$('#username').focus()

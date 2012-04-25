@@ -29,7 +29,7 @@
         });
       },
       load: function(options) {
-        var amz, amzString, contentMD5, contentType, data, date, ext, headers, lowered, meta, method, name, params, request, resource, signature, stringToSign, url, value;
+        var amz, amzString, contentMD5, contentType, data, date, ext, headers, lowered, method, name, params, request, resource, signature, stringToSign, url, value, _ref;
         if (options == null) options = {};
         headers = options.headers || {};
         for (name in headers) {
@@ -62,23 +62,20 @@
           }));
         }
         headers['x-amz-date'] = date;
-        if (options.acl) {
-          headers['x-amz-acl'] = options.acl;
-          amz.push('x-amz-acl:' + options.acl);
+        if (options.acl) headers['x-amz-acl'] = options.acl;
+        if (options.meta) {
+          _ref = options.meta;
+          for (name in _ref) {
+            if (!__hasProp.call(_ref, name)) continue;
+            value = _ref[name];
+            value = value.replace(/\n/g, ' ');
+            headers['x-amz-meta-' + name.toLowerCase()] = value;
+          }
         }
         for (name in headers) {
+          if (!__hasProp.call(headers, name)) continue;
           value = headers[name];
           if (name.slice(0, 6) === 'x-amz-') amz.push(name + ':' + value);
-        }
-        if (options.meta) {
-          meta = options.meta;
-          for (name in meta) {
-            if (!__hasProp.call(meta, name)) continue;
-            value = meta[name];
-            value = value.replace(/\n/g, ' ');
-            headers['x-amz-meta-' + name] = value;
-            amz.push('x-amz-meta-' + name + ':' + value);
-          }
         }
         if (!options.anonymous) {
           amzString = '';
@@ -87,7 +84,7 @@
           signature = base64.encrypt(hmac(sha1, utf8.encode(stringToSign), secret, {
             asBytes: true
           }));
-          headers['Authorization'] = 'AWS ' + key + ':' + signature;
+          headers['authorization'] = 'AWS ' + key + ':' + signature;
         }
         request = {
           type: method,

@@ -29,9 +29,12 @@ define ['app', 'templates/site-menu-item', 'templates/breadcrumb', 'view/sidebar
 		updateCrumbs file
 	
 	
+	
 	# view code
 	$ ->
 		$('body').fadeIn()
+		
+		$('#signedin-user').text app.username
 		
 		$('#breadcrumbs').delegate 'li.crumb a', 'click', (event) ->
 			event.preventDefault()
@@ -43,4 +46,7 @@ define ['app', 'templates/site-menu-item', 'templates/breadcrumb', 'view/sidebar
 			site = $(this).data('model')
 			if site
 				app.sites.selected = site
-	
+		
+		siteName = location.pathname.split('/')[1]
+		if siteName isnt 'websights'
+			$('#site-name').text(siteName).attr('href', 'http://' + siteName + '/')
