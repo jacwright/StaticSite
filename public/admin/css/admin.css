@@ -149,10 +149,10 @@ html, body {
 	display: inline;
 }
 #menu .delete a.confirm {
-	color: #c00;
+	color: #900;
 }
 #menu .delete a.cancel {
-	color: #005580;
+	color: #08C;
 }
 #menu .delete .confirmation a {
 	display: inline;
