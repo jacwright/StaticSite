@@ -55,10 +55,7 @@ define ['./file', './folder', 'lib/promises'], (File, Folder, promises) ->
 			@cid = settingsCID
 		
 		@match: (attr) ->
-			matches = attr.key.indexOf('admin/') is 0 and attr.key.indexOf('admin/templates') isnt 0
-			if matches
-				console.log attr.key, 'matches'
-			return matches
+			attr.key.indexOf('admin/') is 0 and attr.key.indexOf('admin/templates') isnt 0
 	
 	
 	
