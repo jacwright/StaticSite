@@ -2,7 +2,7 @@
   var __hasProp = Object.prototype.hasOwnProperty,
     __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor; child.__super__ = parent.prototype; return child; };
 
-  define(['./model', './collection', './file', 'lib/s3', './folder', './page'], function(Model, Collection, File, s3) {
+  define(['./model', './collection', './file', 'lib/s3', './folder', './page', './admin-files'], function(Model, Collection, File, s3) {
     var Site, SiteCollection, fileName, trailingSlash;
     trailingSlash = /\/$/;
     fileName = /[^\/]+\/?$/;
@@ -40,7 +40,7 @@
           parent = _this._lookup[parentId] || _this._lookup[parentId.replace(trailingSlash, '')];
           if (parent) {
             return parent.children.add(file);
-          } else if (file.id !== 'admin/') {
+          } else {
             return _this.children.add(file);
           }
         });

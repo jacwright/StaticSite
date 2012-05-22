@@ -1,11 +1,27 @@
 (function() {
 
   require(['app'], function(app) {
-    return app.children.on('change:selected', function(site, file) {
+    var editor, modes, session;
+    modes = {
+      html: new (ace.require('ace/mode/html').Mode),
+      js: new (ace.require('ace/mode/html').Mode),
+      css: new (ace.require('ace/mode/html').Mode)
+    };
+    editor = ace.edit($('#code-editor').get(0));
+    $('#code-editor').data('editor', editor);
+    session = editor.getSession();
+    session.setMode(modes.html);
+    session.setUseSoftTabs(false);
+    editor.renderer.setShowPrintMargin(false);
+    editor.renderer.setShowGutter(true);
+    editor.renderer.setHScrollBarAlwaysVisible(false);
+    return app.currentFiles.on('reset change:selected', function() {
+      var file;
+      file = app.currentFiles.selected;
       if (!file) return;
-      file.fetch();
-      $('#code-editor').hide();
-      if (file) return $('#frame').prop('src', file.url);
+      return file.fetch().then(function() {
+        return session.setValue(file.content);
+      });
     });
   });
 

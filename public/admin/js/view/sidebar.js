@@ -11,22 +11,22 @@
         return menuItem(file).appendTo('#menu > ul');
       }
     };
-    app.children.on('add', onFileAdd);
-    app.children.on('remove', function(file, files, options) {
+    app.currentFiles.on('add', onFileAdd);
+    app.currentFiles.on('remove', function(file, files, options) {
       return $("#menu li[data-id=" + file.cid + "]").remove();
     });
-    app.children.on('reset', function() {
+    app.currentFiles.on('reset', function() {
       $('#menu ul li').remove();
-      return app.children.forEach(function(file, index) {
-        return onFileAdd(file, app.children, {
+      return app.currentFiles.forEach(function(file, index) {
+        return onFileAdd(file, app.currentFiles, {
           index: index
         });
       });
     });
-    app.children.on('reset change:selected', function() {
+    app.currentFiles.on('reset change:selected', function() {
       $('#menu li.active').removeClass('active');
-      if (app.children.selected) {
-        return $("#menu li[data-id=" + app.children.selected.cid + "]").addClass('active');
+      if (app.currentFiles.selected) {
+        return $("#menu li[data-id=" + app.currentFiles.selected.cid + "]").addClass('active');
       }
     });
     editName = function(file, isNew) {
@@ -40,7 +40,7 @@
       };
       cancel = function() {
         if (isNew) {
-          app.children.remove(file);
+          app.currentFiles.remove(file);
           return app.files.remove(file);
         } else {
           return done();
@@ -80,18 +80,20 @@
         });
       });
       $('#menu').delegate('li', 'click', function(event) {
-        if ($(event.target).closest('.actions').length) return;
-        return app.children.selected = app.children.get($(this).data('model').id);
-      });
-      $('#menu').delegate('li', 'dblclick', function() {
         var file;
+        if ($(event.target).closest('.actions').length) return;
         file = $(this).data('model');
         if (file.isFolder) {
-          return app.files.selected = app.children.get($(this).data('model').id);
+          return app.files.selected = file;
+        } else {
+          return app.currentFiles.selected = file;
         }
       });
       $('#menu').delegate('.actions a', 'click', function(event) {
         return event.preventDefault();
+      });
+      $('#menu').delegate('.dropdown-toggle', 'click', function(event) {
+        return $(this).closest('li').find('.delete.confirm').removeClass('confirm');
       });
       $('#menu').delegate('.delete .action', 'click', function(event) {
         event.stopPropagation();
@@ -116,7 +118,7 @@
         event.preventDefault();
         name = 'new-folder/';
         if (app.files.selected) name = app.files.selected.key + name;
-        while (app.children.get(name)) {
+        while (app.currentFiles.get(name)) {
           name = name.replace(/(-(\d+))?\/$/, function(match, appended, num) {
             return '-' + (parseInt(num) + 1 || 2) + '/';
           });
@@ -126,7 +128,7 @@
           lastModified: new Date()
         });
         app.files.add(file);
-        app.children.add(file);
+        app.currentFiles.add(file);
         return editName(file, true);
       });
     });

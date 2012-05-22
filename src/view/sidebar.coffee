@@ -10,22 +10,22 @@ require ['app', 'model/file', 'model/folder', 'templates/menu-item', 'templates/
 			menuItem(file).appendTo '#menu > ul'
 	
 	
-	app.children.on 'add', onFileAdd
+	app.currentFiles.on 'add', onFileAdd
 	
-	app.children.on 'remove', (file, files, options) ->
+	app.currentFiles.on 'remove', (file, files, options) ->
 		$("#menu li[data-id=#{file.cid}]").remove()
 	
 	
-	app.children.on 'reset', ->
+	app.currentFiles.on 'reset', ->
 		# move out to current selected folder
 		$('#menu ul li').remove()
-		app.children.forEach (file, index) ->
-			onFileAdd(file, app.children, index: index)
+		app.currentFiles.forEach (file, index) ->
+			onFileAdd(file, app.currentFiles, index: index)
 	
 	
-	app.children.on 'reset change:selected', ->
+	app.currentFiles.on 'reset change:selected', ->
 		$('#menu li.active').removeClass('active')
-		$("#menu li[data-id=#{app.children.selected.cid}]").addClass('active') if app.children.selected
+		$("#menu li[data-id=#{app.currentFiles.selected.cid}]").addClass('active') if app.currentFiles.selected
 	
 	
 	editName = (file, isNew = false) ->
@@ -36,7 +36,7 @@ require ['app', 'model/file', 'model/folder', 'templates/menu-item', 'templates/
 		done = -> input.remove()
 		cancel = ->
 			if isNew
-				app.children.remove file
+				app.currentFiles.remove file
 				app.files.remove file
 			else
 				done()
@@ -63,50 +63,67 @@ require ['app', 'model/file', 'model/folder', 'templates/menu-item', 'templates/
 		$('#new-file').click ->
 			newFile().modal(backdrop: 'static')
 		
-		
+		# select a file or open a folder when clicked
 		$('#menu').delegate 'li', 'click', (event) ->
 			return if $(event.target).closest('.actions').length
-			app.children.selected = app.children.get $(this).data('model').id
-		
-		$('#menu').delegate 'li', 'dblclick', ->
 			file = $(this).data 'model'
 			if file.isFolder
-				app.files.selected = app.children.get $(this).data('model').id
+				app.files.selected = file
+			else
+				app.currentFiles.selected = file
 		
 		
+		# open a folder on double click
+#		$('#menu').delegate 'li', 'dblclick', ->
+#			file = $(this).data 'model'
+#			if file.isFolder
+#				app.files.selected = app.currentFiles.get $(this).data('model').id
+		
+		
+		## FILE ACTIONS
+		
+		# all action links should have the default prevented
 		$('#menu').delegate '.actions a', 'click', (event) ->
 			event.preventDefault()
 		
+		# close delete confirmation if left open
+		$('#menu').delegate '.dropdown-toggle', 'click', (event) ->
+			$(this).closest('li').find('.delete.confirm').removeClass('confirm')
+		
+		# add the confirm class to show the Yes/Cancel confirmation for deleting
 		$('#menu').delegate '.delete .action', 'click', (event) ->
 			event.stopPropagation()
 			$(this).closest('.delete').addClass('confirm')
 		
+		# cancel a delete by removing the confirm class
 		$('#menu').delegate '.delete .cancel', 'click', (event) ->
 			event.stopPropagation()
 			$(this).closest('.delete').removeClass('confirm')
 		
+		# delete the file
 		$('#menu').delegate '.delete .confirm', 'click', ->
 			file = $(this).closest('li.menu-item').data('model')
 			file.destroy()
 		
+		# rename the file
 		$('#menu').delegate '.actions .rename', 'click', ->
 			file = $(this).closest('li.menu-item').data('model')
 			editName file
 		
 		
-		
+		# new folder action
 		$('#new-folder').click (event) ->
 			event.preventDefault()
 			name = 'new-folder/'
 			name = app.files.selected.key + name if app.files.selected
 			
-			while app.children.get name
+			while app.currentFiles.get name
 				name = name.replace /(-(\d+))?\/$/, (match, appended, num) ->
 					return '-' + (parseInt(num) + 1 or 2) + '/'
 			
 			file = new Folder key: name, lastModified: new Date()
 			app.files.add file
-			app.children.add file
+			app.currentFiles.add file
 			editName file, true
 		
 			

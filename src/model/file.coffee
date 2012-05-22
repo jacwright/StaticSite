@@ -51,12 +51,12 @@ define ['./model', './collection', 'lib/promises'], (Model, Collection, promises
 		@prop 'content'
 		
 		constructor: (attr, opts) ->
-			attr?.lastModified = new Date(attr.lastModified)
+			attr.lastModified = new Date(attr.lastModified) if attr?.lastModified?
 			super(attr, opts)
 			
 			# update name when key is set/updated
 			@on 'change:key', onKeyChange
-			@trigger('change:key', @, @id) if attr.key
+			@trigger('change:key', @, @id) if attr?.key
 			
 			# create children collection
 			@children = new FileCollection()
@@ -129,12 +129,9 @@ define ['./model', './collection', 'lib/promises'], (Model, Collection, promises
 				attrs = model
 				options.collection = this
 				
-				File.subclasses.some (subclass) ->
+				File.subclasses.forEach (subclass) ->
 					if subclass.match(attrs)
 						modelClass = subclass
-						true
-					else
-						false
 				
 				model = new modelClass(attrs, options)
 			super(model, options)

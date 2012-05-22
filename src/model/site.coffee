@@ -1,5 +1,5 @@
 
-define ['./model', './collection', './file', 'lib/s3', './folder', './page'], (Model, Collection, File, s3) ->
+define ['./model', './collection', './file', 'lib/s3', './folder', './page', './admin-files'], (Model, Collection, File, s3) ->
 	
 	trailingSlash = /\/$/
 	fileName = /[^\/]+\/?$/
@@ -36,7 +36,7 @@ define ['./model', './collection', './file', 'lib/s3', './folder', './page'], (M
 				parent = @_lookup[parentId] or @_lookup[parentId.replace(trailingSlash, '')]
 				if parent
 					parent.children.add(file)
-				else unless file.id is 'admin/'
+				else
 					@children.add(file)
 		
 		

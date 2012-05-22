@@ -28,9 +28,7 @@
 			<a id="site-name" class="brand" href="#">Websights</a>
 			<div class="nav-collapse">
 				<ul class="nav">
-					<li class="active"><a href="#">Site</a></li>
-					<li><a href="#templates">Templates</a></li>
-					<li><a href="#settings">Settings</a></li>
+					
 				</ul>
 			</div>
 			<ul class="nav pull-right">
@@ -42,59 +40,66 @@
 	</div>
 </div>
 
-<div id="container" class="container-fluid">
-	<div id="sidebar" unselectable="on" class="pod unselectable">
-		<div class="btn-toolbar">
-			<div class="btn-group">
-				<button class="btn" style="overflow: hidden">
-					<span class="icon add"></span> Add
-					<input type="file" class="btn" name="files[]" multiple style="position: absolute; opacity: 0; left: 0; right: 0; top: 0; height: 20px;">
-				</button>
-				<button class="btn dropdown-toggle" data-toggle="dropdown">
-					<span class="caret"></span>
-				</button>
-				<ul class="dropdown-menu">
-					<li id="new-page"><a href="#"><span class="icon layout-add"></span> <strong>Page</strong></a></li>
-					<li id="new-folder"><a href="#"><span class="icon folder-add"></span> <strong>Folder</strong></a></li>
-					<li id="new-html"><a href="#"><span class="icon html-add"></span> <strong>Document</strong></a></li>
-					<li id="new-css"><a href="#"><span class="icon css-add"></span> <strong>Stylesheet</strong></a></li>
-					<li id="new-js"><a href="#"><span class="icon script-add"></span> <strong>Script</strong></a></li>
-				</ul>
-			</div>
-			<div class="btn-group">
-				
-			</div>
-		</div>
-		<div id="menu">
-			<ul>
+<div id="screens">
+	
+	<div id="container" class="container-fluid">
+		
+		<div id="breadcrumbs" class="btn-toolbar">
+			<ul class="breadcrumb pod">
+				<li>
+					<div class="btn-group">
+						<a class="btn btn-mini dropdown-toggle" data-toggle="dropdown" href="#">
+							<span class="caret"></span>
+						</a>
+						<ul id="site-list" class="dropdown-menu">
+							<li id="new-site"><a href="#"><span class="icon sitemap-add"></span> New...</a></li>
+						</ul>
+					</div>
+				</li>
 			</ul>
 		</div>
-	</div>
-	<div id="breadcrumbs" class="btn-toolbar">
-		<ul class="breadcrumb pod">
-			<li>
+		
+		<div id="sidebar" unselectable="on" class="pod unselectable">
+			<div class="btn-toolbar">
 				<div class="btn-group">
-					<a class="btn btn-mini dropdown-toggle" data-toggle="dropdown" href="#">
+					<button class="btn" style="overflow: hidden">
+						<span class="icon add"></span> Add
+						<input type="file" class="btn" name="files[]" multiple style="position: absolute; opacity: 0; left: 0; right: 0; top: 0; height: 20px;">
+					</button>
+					<button class="btn dropdown-toggle" data-toggle="dropdown">
 						<span class="caret"></span>
-					</a>
-					<ul id="site-list" class="dropdown-menu">
-						<li id="new-site"><a href="#"><span class="icon sitemap-add"></span> New...</a></li>
+					</button>
+					<ul class="dropdown-menu">
+						<li id="new-page"><a href="#"><span class="icon layout-add"></span> <strong>Page</strong></a></li>
+						<li id="new-folder"><a href="#"><span class="icon folder-add"></span> <strong>Folder</strong></a></li>
+						<li id="new-html"><a href="#"><span class="icon html-add"></span> <strong>Document</strong></a></li>
+						<li id="new-css"><a href="#"><span class="icon css-add"></span> <strong>Stylesheet</strong></a></li>
+						<li id="new-js"><a href="#"><span class="icon script-add"></span> <strong>Script</strong></a></li>
 					</ul>
 				</div>
-			</li>
-		</ul>
-	</div>
-	<div id="main">
-		<div id="editors" class="pod">
-			<div id="code-editor"></div>
-			<iframe id="frame"></iframe>
+			</div>
+			<div id="menu">
+				<ul>
+				</ul>
+			</div>
+		</div>
+		
+		<div id="main">
+			<div id="editors" class="pod">
+				<div id="code-editor"></div>
+				<iframe id="frame"></iframe>
+			</div>
 		</div>
 	</div>
+
 </div>
 
 <script src="js/jquery.js"></script>
 <script src="js/bootstrap.min.js"></script>
 <script src="js/lib/ace/ace-noconflict.js"></script>
+<script src="js/lib/ace/mode-css-noconflict.js"></script>
+<script src="js/lib/ace/mode-html-noconflict.js"></script>
+<script src="js/lib/ace/mode-javascript-noconflict.js"></script>
 <script src="js/require.min.js" data-main="js/main"></script>
 </body>
 </html>

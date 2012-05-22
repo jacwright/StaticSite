@@ -64,10 +64,14 @@
 
       function File(attr, opts) {
         var _this = this;
-        if (attr != null) attr.lastModified = new Date(attr.lastModified);
+        if ((attr != null ? attr.lastModified : void 0) != null) {
+          attr.lastModified = new Date(attr.lastModified);
+        }
         File.__super__.constructor.call(this, attr, opts);
         this.on('change:key', onKeyChange);
-        if (attr.key) this.trigger('change:key', this, this.id);
+        if (attr != null ? attr.key : void 0) {
+          this.trigger('change:key', this, this.id);
+        }
         this.children = new FileCollection();
         this.children.on('remove', function(file) {
           return file.parent = null;
@@ -168,13 +172,8 @@
           modelClass = this.model;
           attrs = model;
           options.collection = this;
-          File.subclasses.some(function(subclass) {
-            if (subclass.match(attrs)) {
-              modelClass = subclass;
-              return true;
-            } else {
-              return false;
-            }
+          File.subclasses.forEach(function(subclass) {
+            if (subclass.match(attrs)) return modelClass = subclass;
           });
           model = new modelClass(attrs, options);
         }
