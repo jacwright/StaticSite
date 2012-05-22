@@ -6,12 +6,13 @@ templater = require './lib/templater'
 watch = require 'watch'
 knox = require 'knox'
 bucket = null
+config = null
 		
 ansi =
-	green: '\033[32m'
-	red: '\033[31m'
-	yellow: '\033[33m'
-	none: '\033[0m'
+	green: '\u001b[32m'
+	red: '\u001b[31m'
+	yellow: '\u001b[33m'
+	none: '\u001b[0m'
 
 
 getBucket = (options) ->
@@ -147,6 +148,8 @@ task 'make', 'Compile scripts and upload them', (options) ->
 
 task 'watch', 'Watch scripts and files for changes and compile and upload them when they change', (options) ->
 	bucket = getBucket(options)
+	
+	console.log 'Using bucket:', config.bucket
 	
 	watch.createMonitor 'src', interval: 100, (monitor) ->
 		for filename, stat of monitor.files
