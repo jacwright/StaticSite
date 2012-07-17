@@ -10,6 +10,8 @@
 
       __extends(Site, _super);
 
+      Site.prototype.idAttribute = 'name';
+
       Site.attr('name');
 
       Site.attr('creationDate');

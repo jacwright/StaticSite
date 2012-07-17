@@ -47,6 +47,6 @@ define ['app', 'templates/site-menu-item', 'templates/breadcrumb', 'view/sidebar
 			if site
 				app.sites.selected = site
 		
-		siteName = location.pathname.split('/')[1]
-		if siteName isnt 'websights'
-			$('#site-name').text(siteName).attr('href', 'http://' + siteName + '/')
+		if app.siteName
+			$('#site-name').text(app.siteName).attr('href', 'http://' + app.siteName + '/')
+			$('#site-list-item').remove()

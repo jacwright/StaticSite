@@ -1,0 +1,12 @@
+.cm-s-intellij span.cm-comment { color: #808080; font-style: italic; }
+.cm-s-intellij span.cm-keyword { line-height: 1em; font-weight: bold; color: #000080; }
+.cm-s-intellij span.cm-string { line-height: 1em; font-weight: bold; color: #008000; }
+.cm-s-intellij span.cm-builtin { line-height: 1em; font-weight: bold; color: #640e78; font-style: italic; }
+.cm-s-intellij span.cm-special { line-height: 1em; font-weight: bold; color: #640e78; }
+.cm-s-intellij span.cm-variable { color: #448282; }
+.cm-s-intellij span.cm-number { color: #00f; }
+.cm-s-intellij span.cm-atom { line-height: 1em; font-weight: bold; color: #00f; }
+.cm-s-intellij span.cm-meta {color: #555;}
+.cm-s-intellij span.cm-link { color: #3a3; }
+.cm-s-intellij span.cm-tag { line-height: 1em; font-weight: bold; color: #000080; }
+.cm-s-intellij span.cm-attribute { line-height: 1em; font-weight: bold; color: #0000ff; }

@@ -9,10 +9,17 @@
 	<link href="css/bootstrap.min.css" rel="stylesheet">
 	<link href="css/admin.css" rel="stylesheet">
 	<link href="css/icon-sprite.css" rel="stylesheet">
+	<link href="js/lib/codemirror/codemirror.css" rel="stylesheet">
+	<link href="js/lib/codemirror/intellij.css" rel="stylesheet">
 	<!--[if lt IE 9]>
 	<script src="http://html5shim.googlecode.com/svn/trunk/html5.js"></script>
 	<![endif]-->
 	<link rel="shortcut icon" href="img/favicon.ico">
+	<style>
+		.nav-tabs {
+			padding: 4px 6px 0;
+		}
+	</style>
 </head>
 
 <body style="display: none">
@@ -46,7 +53,7 @@
 		
 		<div id="breadcrumbs" class="btn-toolbar">
 			<ul class="breadcrumb pod">
-				<li>
+				<li id="site-list-item">
 					<div class="btn-group">
 						<a class="btn btn-mini dropdown-toggle" data-toggle="dropdown" href="#">
 							<span class="caret"></span>
@@ -79,15 +86,19 @@
 				</div>
 			</div>
 			<div id="menu">
-				<ul>
+				<ul class="children opened">
 				</ul>
 			</div>
 		</div>
 		
-		<div id="main">
-			<div id="editors" class="pod">
-				<div id="code-editor"></div>
-				<iframe id="frame"></iframe>
+		<div id="main" class="pod">
+			<ul class="nav nav-tabs">
+			  <li class="active"><a href="#frame" data-toggle="tab" class="live">Live View</a></li>
+			  <li><a href="#code-editor" data-toggle="tab" class="edit">Edit</a></li>
+			</ul>
+			<div id="editors" class="tab-content" style="top: 41px; display: block">
+				<iframe id="frame" class="tab-pane active"></iframe>
+				<div id="code-editor" class="tab-pane"></div>
 			</div>
 		</div>
 	</div>
@@ -96,10 +107,11 @@
 
 <script src="js/jquery.js"></script>
 <script src="js/bootstrap.min.js"></script>
-<script src="js/lib/ace/ace-noconflict.js"></script>
-<script src="js/lib/ace/mode-css-noconflict.js"></script>
-<script src="js/lib/ace/mode-html-noconflict.js"></script>
-<script src="js/lib/ace/mode-javascript-noconflict.js"></script>
+<script src="js/lib/codemirror/codemirror.js"></script>
+<script src="js/lib/codemirror/css.js"></script>
+<script src="js/lib/codemirror/javascript.js"></script>
+<script src="js/lib/codemirror/xml.js"></script>
+<script src="js/lib/codemirror/htmlmixed.js"></script>
 <script src="js/require.min.js" data-main="js/main"></script>
 </body>
 </html>

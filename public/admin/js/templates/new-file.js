@@ -101,6 +101,8 @@ function newFile(data,index) {
 
 }
 
-return templates.get.bind(null, newFile.bind(templates.helpers));
+var boundTemplate = templates.get.bind(null, newFile.bind(templates.helpers));
+templates.register('new-file', boundTemplate);
+return boundTemplate;
 
 });

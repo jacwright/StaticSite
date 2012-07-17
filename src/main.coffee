@@ -6,4 +6,5 @@ require ['app', 'view', 'util/admin-redirect'], (app) ->
 		return
 	
 	app.load().finished (sites) ->
-		sites.selectedIndex = 0
+		atSite = sites.get app.siteName
+		if atSite then sites.selected = atSite else sites.selectedIndex = 0

@@ -2,8 +2,13 @@
 define ['lib/backbone'], (backbone) ->
 	
 	module = {}
+	templates = {}
 	
 	module.get = get = (templateFunction, data = {}, opts = {}) ->
+		templateFunction = templates[templateFunction] if typeof templateFunction is 'string'
+		
+		throw new Error('Template is undefined') unless templateFunction
+		
 		if data instanceof Array or (Backbone && data instanceof Backbone.Collection)
 			# detach so that the individual DocumentFragment parentNodes don't mess up insertions
 			if opts.textOnly
@@ -26,7 +31,7 @@ define ['lib/backbone'], (backbone) ->
 				sub = $ @
 				propertyName = sub.attr('data-data').replace /^[^.]+\./, ''
 				if data[propertyName]
-					get(sub.attr 'data-template', data[propertyName]).appendTo(sub)
+					get(sub.attr('data-template'), data[propertyName]).appendTo(sub)
 			
 			if Backbone and data instanceof Backbone.Model and not opts.unbound
 				onChange = -> elem = elem.replaceSilently templateFunction(data, opts.index)
@@ -35,6 +40,11 @@ define ['lib/backbone'], (backbone) ->
 				
 				elem.on 'removing', -> data.unbind 'change', onChange
 			elem
+	
+	
+	module.register = (name, templateFunction) ->
+		templates[name] = templateFunction
+	
 	
 	
 	# allow us to clean up before an element is removed

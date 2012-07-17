@@ -8,6 +8,7 @@ define ['./model', './collection', './file', 'lib/s3', './folder', './page', './
 	
 	class Site extends Model
 		
+		idAttribute: 'name'
 		@attr 'name'
 		@attr 'creationDate'
 		@prop 'url'

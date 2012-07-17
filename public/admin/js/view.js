@@ -27,7 +27,6 @@
       return updateCrumbs(file);
     });
     return $(function() {
-      var siteName;
       $('body').fadeIn();
       $('#signedin-user').text(app.username);
       $('#breadcrumbs').delegate('li.crumb a', 'click', function(event) {
@@ -42,9 +41,9 @@
         site = $(this).data('model');
         if (site) return app.sites.selected = site;
       });
-      siteName = location.pathname.split('/')[1];
-      if (siteName !== 'websights') {
-        return $('#site-name').text(siteName).attr('href', 'http://' + siteName + '/');
+      if (app.siteName) {
+        $('#site-name').text(app.siteName).attr('href', 'http://' + app.siteName + '/');
+        return $('#site-list-item').remove();
       }
     });
   });

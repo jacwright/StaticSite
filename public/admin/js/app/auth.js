@@ -13,7 +13,11 @@
         passwordSha = sha1(password);
         $.get(path + usernameSha).then(function(cypher) {
           var creds, key, secret, _ref;
-          _ref = aes.decrypt(cypher, passwordSha).split(':'), key = _ref[0], secret = _ref[1];
+          try {
+            _ref = aes.decrypt(cypher, passwordSha).split(':'), key = _ref[0], secret = _ref[1];
+          } catch (e) {
+
+          }
           if (!(key && secret)) {
             return deferred.fail(new Error('Incorrect Password'));
           }

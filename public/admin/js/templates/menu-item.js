@@ -90,6 +90,8 @@ function menuItem(data,index) {
 
 }
 
-return templates.get.bind(null, menuItem.bind(templates.helpers));
+var boundTemplate = templates.get.bind(null, menuItem.bind(templates.helpers));
+templates.register('menu-item', boundTemplate);
+return boundTemplate;
 
 });

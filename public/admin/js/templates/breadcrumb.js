@@ -5,7 +5,7 @@ function breadcrumb(data,index) {
 
   name = "breadcrumb";
 
-  source = "<% if data.site and app.files.selected is data: %>\n<li class=\"crumb\">\n\t<span class=\"divider\">/</span> <%= data.name %>\n</li>\n<% else if data.site: %>\n<li class=\"crumb\">\n\t<span class=\"divider\">/</span> <a href=\"<%= data.url %>\"><%= data.name %></a>\n</li>\n<% else if app.files.selected: %>\n<li class=\"crumb\">\n\t<a href=\"<%= data.url %>\"><%= data.name %></a>\n</li>\n<% else: %>\n<li class=\"crumb\">\n\t<%= data.name %>\n</li>\n<% end %>\n";
+  source = "<% if data.site and app.files.selected is data: %>\n<li class=\"crumb\">\n\t<span class=\"divider\">/</span> <%= data.name %>\n</li>\n<% else if data.site: %>\n<li class=\"crumb\">\n\t<span class=\"divider\">/</span> <a href=\"<%= data.url %>\"><%= data.name %></a>\n</li>\n<% else if app.files.selected and app.siteName: %>\n<li class=\"crumb\">\n\t<a href=\"<%= data.url %>\">Home</a>\n</li>\n<% else if app.files.selected: %>\n<li class=\"crumb\">\n\t<a href=\"<%= data.url %>\"><%= data.name %></a>\n</li>\n<% else if app.siteName: %>\n<li class=\"crumb\">\n\tHome\n</li>\n<% else: %>\n<li class=\"crumb\">\n\t<%= data.name %>\n</li>\n<% end %>\n";
 
   try {
     __line = 1;
@@ -36,35 +36,57 @@ function breadcrumb(data,index) {
       __lines.push('</li>\n');
       __line = 9;
       __lines.push('');
-    } else if (app.files.selected) {
+    } else if (app.files.selected && app.siteName) {
       __lines.push('\n');
       __line = 10;
       __lines.push('<li class="crumb">\n');
       __line = 11;
       __lines.push('\t<a href="');
       __lines.push(this.escape(data.url));
-      __lines.push('">');
-      __lines.push(this.escape(data.name));
-      __lines.push('</a>\n');
+      __lines.push('">Home</a>\n');
       __line = 12;
       __lines.push('</li>\n');
       __line = 13;
       __lines.push('');
-    } else {
+    } else if (app.files.selected) {
       __lines.push('\n');
       __line = 14;
       __lines.push('<li class="crumb">\n');
       __line = 15;
-      __lines.push('\t');
+      __lines.push('\t<a href="');
+      __lines.push(this.escape(data.url));
+      __lines.push('">');
       __lines.push(this.escape(data.name));
-      __lines.push('\n');
+      __lines.push('</a>\n');
       __line = 16;
       __lines.push('</li>\n');
       __line = 17;
       __lines.push('');
+    } else if (app.siteName) {
+      __lines.push('\n');
+      __line = 18;
+      __lines.push('<li class="crumb">\n');
+      __line = 19;
+      __lines.push('\tHome\n');
+      __line = 20;
+      __lines.push('</li>\n');
+      __line = 21;
+      __lines.push('');
+    } else {
+      __lines.push('\n');
+      __line = 22;
+      __lines.push('<li class="crumb">\n');
+      __line = 23;
+      __lines.push('\t');
+      __lines.push(this.escape(data.name));
+      __lines.push('\n');
+      __line = 24;
+      __lines.push('</li>\n');
+      __line = 25;
+      __lines.push('');
     }
     __lines.push('\n');
-    __line = 18;
+    __line = 26;
     __lines.push('');
     return __lines.join('');
   } catch (error) {
@@ -80,6 +102,8 @@ function breadcrumb(data,index) {
 
 }
 
-return templates.get.bind(null, breadcrumb.bind(templates.helpers));
+var boundTemplate = templates.get.bind(null, breadcrumb.bind(templates.helpers));
+templates.register('breadcrumb', boundTemplate);
+return boundTemplate;
 
 });

@@ -15,7 +15,9 @@ define ['lib/crypto', 'lib/promises', 'lib/s3'], (crypto, promises, s3) ->
 		
 		
 		$.get(path + usernameSha).then (cypher) ->
-			[key, secret] = aes.decrypt(cypher, passwordSha).split(':')
+			try
+				[key, secret] = aes.decrypt(cypher, passwordSha).split(':')
+			catch e
 			
 			unless key and secret
 				return deferred.fail new Error('Incorrect Password')

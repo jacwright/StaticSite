@@ -1,15 +1,20 @@
 
 define ['app/auth', 'model/site', 'model/file'], (auth, Site, File) ->
 	
-	app = 
+	app =
+		siteName: location.pathname.split('/')[1]
 		username: auth.authorize()
 		sites: new Site.Collection()
 		files: new File.Collection()
 		currentFiles: new File.Collection()
 		
 		load: -> @sites.fetch()
+		
+		register: (page) ->
+			
 	
 	
+	app.siteName = null if app.siteName is 'websights'
 	
 	app.sites.on 'change:selected', (sites, site, options) ->
 		# remove old listeners
@@ -29,7 +34,7 @@ define ['app/auth', 'model/site', 'model/file'], (auth, Site, File) ->
 		if app.currentFiles.selected is null
 			# index first, then first file
 			defaultPage = app.currentFiles.query('name').is('index.html').end().pop()
-			defaultPage = app.currentFiles.query('isFolder').isnt(true).end().pop() unless defaultPage
+			defaultPage = app.currentFiles.query('isFolder').isnt(true).end().shift() unless defaultPage
 			app.currentFiles.selected = defaultPage
 			
 	

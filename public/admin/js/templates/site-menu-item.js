@@ -35,6 +35,8 @@ function siteMenuItem(data,index) {
 
 }
 
-return templates.get.bind(null, siteMenuItem.bind(templates.helpers));
+var boundTemplate = templates.get.bind(null, siteMenuItem.bind(templates.helpers));
+templates.register('site-menu-item', boundTemplate);
+return boundTemplate;
 
 });

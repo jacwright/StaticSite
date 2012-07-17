@@ -91,6 +91,16 @@ exports.compile = compile = (name, source, opts = {}) ->
 	funcName = camelize(name)
 	compiled = Function('data', 'index', js).toString().replace('anonymous', funcName)
 	
-	"define(['lib/templates'], function (templates) {\n\n#{compiled}\n\nreturn templates.get.bind(null, #{funcName}.bind(templates.helpers));\n\n});"
+	fileContents = """
+		define(['lib/templates'], function (templates) {
+		
+		#{compiled}
+		
+		var boundTemplate = templates.get.bind(null, #{funcName}.bind(templates.helpers));
+		templates.register('#{name}', boundTemplate);
+		return boundTemplate;
+		
+		});
+		"""
 
 	

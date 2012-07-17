@@ -2,12 +2,17 @@
   var __hasProp = Object.prototype.hasOwnProperty;
 
   define(['lib/backbone'], function(backbone) {
-    var become, get, getOnChange, helpers, linkify, module, superCleanData;
+    var become, get, getOnChange, helpers, linkify, module, superCleanData, templates;
     module = {};
+    templates = {};
     module.get = get = function(templateFunction, data, opts) {
       var elem, html, onChange;
       if (data == null) data = {};
       if (opts == null) opts = {};
+      if (typeof templateFunction === 'string') {
+        templateFunction = templates[templateFunction];
+      }
+      if (!templateFunction) throw new Error('Template is undefined');
       if (data instanceof Array || (Backbone && data instanceof Backbone.Collection)) {
         if (opts.textOnly) {
           elem = data.map(function(data, index) {
@@ -32,7 +37,7 @@
           sub = $(this);
           propertyName = sub.attr('data-data').replace(/^[^.]+\./, '');
           if (data[propertyName]) {
-            return get(sub.attr('data-template', data[propertyName])).appendTo(sub);
+            return get(sub.attr('data-template'), data[propertyName]).appendTo(sub);
           }
         });
         if (Backbone && data instanceof Backbone.Model && !opts.unbound) {
@@ -46,6 +51,9 @@
         }
         return elem;
       }
+    };
+    module.register = function(name, templateFunction) {
+      return templates[name] = templateFunction;
     };
     superCleanData = $.cleanData;
     $.cleanData = function(elems) {
