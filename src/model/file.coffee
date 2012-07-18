@@ -51,6 +51,12 @@ define ['./model', './collection', 'lib/promises'], (Model, Collection, promises
 		@prop 'content'
 		
 		constructor: (attr, opts) ->
+			# handle subtypes, but not when constructor is being called as "super"
+			if @constructor is File
+				subclass = File.subclasses.filter( (subclass) -> subclass.match(attr) ).pop()
+				return new subclass(attr, opts) if subclass
+			
+			
 			attr.lastModified = new Date(attr.lastModified) if attr?.lastModified?
 			super(attr, opts)
 			
@@ -110,6 +116,21 @@ define ['./model', './collection', 'lib/promises'], (Model, Collection, promises
 			return if @content is undefined
 			@site.bucket.put(@id, @content)
 			
+		
+		
+		fetchMetadata: (options) ->
+			if app.cache[@id]?.lastModified is @lastModified.getTime()
+				delete app.cache[@id].lastModified
+				promise = promises.fulfilled app.cache[@id]
+			else
+				promise = app.site.bucket.metadata(@id)
+			
+			promise.then (metadata) =>
+				for name, value of metadata
+					@[name] = value
+				metadata.lastModified = @lastModified.getTime()
+				app.cache[@id] = metadata
+				@
 		
 		
 		fetch: (options) ->

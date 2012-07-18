@@ -83,18 +83,18 @@ define ['./date', './crypto', './promises'], (_date_, crypto, promises) ->
 				headers: headers
 				data: data
 			
-			return promises.when($.ajax request).then (results) ->
-				deferred = new promises.Deferred()
-				setTimeout (-> deferred.fulfill results[0]), 0
-				deferred.promise
-			, (results) ->
-				xhr = results[0]
+			deferred = new promises.Deferred()
+			
+			$.ajax(request).then (results, status, xhr) ->
+				deferred.fulfill(results, xhr)
+			, (xhr) ->
 				xml = $(xhr.responseText)
 				if xml.find('code').text() is 'SignatureDoesNotMatch'
 					console.error('Signature does not match, expected:\n', xml.find('StringToSign').text().replace(/\n/g, '\\n'), '\nactual:\n', stringToSign.replace(/\n/g, '\\n'));
 				
 				new Error(xml.find('message').text())
 			
+			deferred.promise
 	
 	
 	
@@ -129,6 +129,37 @@ define ['./date', './crypto', './promises'], (_date_, crypto, promises) ->
 				url: url
 			
 			s3.load(options)
+				
+		
+		metadata: (url, options) ->
+			url = @url + url
+			options = $.extend options or {},
+				method: 'head'
+				url: url
+			
+			s3.load(options).then (results, xhr) ->
+				headerString = xhr.getAllResponseHeaders()
+				headers = {}
+				
+				for header in headerString.split('\n')
+					[name, value] = header.split(/\s*:\s*/)
+					continue unless name
+					if headers[name]
+						if headers[name] instanceof Array
+							headers[name].push(value)
+						else
+							headers[name] = [headers[name], value]
+					else
+						headers[name] = value if name
+				
+				metadata =
+					contentType: headers['Content-Type']	
+				
+				for own name, value of headers
+					if name.indexOf('x-amz-meta-') is 0
+						metadata[name.replace('x-amz-meta-', '')] = value
+				return metadata
+		
 		
 		put: (url, data, options = {}) ->
 			url = @url + url
@@ -207,11 +238,10 @@ define ['./date', './crypto', './promises'], (_date_, crypto, promises) ->
 		}
 	]
 	
-	xmlToObj = (node, obj) ->
-		unless obj
-			node = node.firstChild
-			obj = {}
-		
+	xmlToObj = (document) -> xmlToObjRecurse document.firstChild, {}
+	
+	
+	xmlToObjRecurse = (node, obj) ->
 		return null unless node.childNodes.length
 		
 		len = node.childNodes.length
@@ -225,9 +255,9 @@ define ['./date', './crypto', './promises'], (_date_, crypto, promises) ->
 			if node.getElementsByTagName(child.tagName).length > 1
 				# this is an array, create it and add to it
 				obj[name] = [] unless obj[name]
-				obj[name].push xmlToObj(child, {})
+				obj[name].push xmlToObjRecurse(child, {})
 			else if child.nodeName and child.nodeName isnt '#cdata-section'
-				obj[name] = xmlToObj(child, {})
+				obj[name] = xmlToObjRecurse(child, {})
 		
 		obj
 	

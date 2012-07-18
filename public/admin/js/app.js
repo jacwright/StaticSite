@@ -13,11 +13,13 @@
       site: site,
       files: site.files,
       currentFiles: new File.Collection(),
+      cache: JSON.parse(localStorage.getItem('appcache') || '{}'),
       load: function() {
         return this.site.fetch().finished(function() {
           if (!app.files.selected) {
-            return site.files.trigger('change:selected', site.files);
+            site.files.trigger('change:selected', site.files);
           }
+          return localStorage.setItem('appcache', JSON.stringify(app.cache));
         });
       },
       registerType: function(page) {}

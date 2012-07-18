@@ -50,7 +50,7 @@
 
       Site.prototype.fetch = function(options) {
         var _this = this;
-        return this.bucket.list().then(function(files) {
+        return this.bucket.list().make(File).when('fetchMetadata').then(function(files) {
           _this.files.add(files);
           _this.trigger('fetched', _this);
           return _this;

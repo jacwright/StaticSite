@@ -63,7 +63,14 @@
       File.prop('content');
 
       function File(attr, opts) {
-        var _this = this;
+        var subclass,
+          _this = this;
+        if (this.constructor === File) {
+          subclass = File.subclasses.filter(function(subclass) {
+            return subclass.match(attr);
+          }).pop();
+          if (subclass) return new subclass(attr, opts);
+        }
         if ((attr != null ? attr.lastModified : void 0) != null) {
           attr.lastModified = new Date(attr.lastModified);
         }
@@ -140,6 +147,27 @@
       File.prototype.save = function(options) {
         if (this.content === void 0) return;
         return this.site.bucket.put(this.id, this.content);
+      };
+
+      File.prototype.fetchMetadata = function(options) {
+        var promise, _ref,
+          _this = this;
+        if (((_ref = app.cache[this.id]) != null ? _ref.lastModified : void 0) === this.lastModified.getTime()) {
+          delete app.cache[this.id].lastModified;
+          promise = promises.fulfilled(app.cache[this.id]);
+        } else {
+          promise = app.site.bucket.metadata(this.id);
+        }
+        return promise.then(function(metadata) {
+          var name, value;
+          for (name in metadata) {
+            value = metadata[name];
+            _this[name] = value;
+          }
+          metadata.lastModified = _this.lastModified.getTime();
+          app.cache[_this.id] = metadata;
+          return _this;
+        });
       };
 
       File.prototype.fetch = function(options) {

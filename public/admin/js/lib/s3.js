@@ -2,7 +2,7 @@
   var __hasProp = Object.prototype.hasOwnProperty;
 
   define(['./date', './crypto', './promises'], function(_date_, crypto, promises) {
-    var Bucket, addQueryParams, base64, hmac, key, md5, mimeTypes, processMimeTypes, s3, secret, sha1, signedHeader, toType, types, utf8, xmlToObj;
+    var Bucket, addQueryParams, base64, hmac, key, md5, mimeTypes, processMimeTypes, s3, secret, sha1, signedHeader, toType, types, utf8, xmlToObj, xmlToObjRecurse;
     md5 = crypto.md5, sha1 = crypto.sha1, hmac = crypto.hmac, base64 = crypto.base64, utf8 = crypto.utf8;
     key = null;
     secret = null;
@@ -29,7 +29,7 @@
         });
       },
       load: function(options) {
-        var amz, amzString, contentMD5, contentType, data, date, ext, headers, lowered, method, name, params, request, resource, signature, stringToSign, url, value, _ref;
+        var amz, amzString, contentMD5, contentType, data, date, deferred, ext, headers, lowered, method, name, params, request, resource, signature, stringToSign, url, value, _ref;
         if (options == null) options = {};
         headers = options.headers || {};
         for (name in headers) {
@@ -92,22 +92,18 @@
           headers: headers,
           data: data
         };
-        return promises.when($.ajax(request)).then(function(results) {
-          var deferred;
-          deferred = new promises.Deferred();
-          setTimeout((function() {
-            return deferred.fulfill(results[0]);
-          }), 0);
-          return deferred.promise;
-        }, function(results) {
-          var xhr, xml;
-          xhr = results[0];
+        deferred = new promises.Deferred();
+        $.ajax(request).then(function(results, status, xhr) {
+          return deferred.fulfill(results, xhr);
+        }, function(xhr) {
+          var xml;
           xml = $(xhr.responseText);
           if (xml.find('code').text() === 'SignatureDoesNotMatch') {
             console.error('Signature does not match, expected:\n', xml.find('StringToSign').text().replace(/\n/g, '\\n'), '\nactual:\n', stringToSign.replace(/\n/g, '\\n'));
           }
           return new Error(xml.find('message').text());
         });
+        return deferred.promise;
       }
     };
     Bucket = (function() {
@@ -143,6 +139,45 @@
           url: url
         });
         return s3.load(options);
+      };
+
+      Bucket.prototype.metadata = function(url, options) {
+        url = this.url + url;
+        options = $.extend(options || {}, {
+          method: 'head',
+          url: url
+        });
+        return s3.load(options).then(function(results, xhr) {
+          var header, headerString, headers, metadata, name, value, _i, _len, _ref, _ref2;
+          headerString = xhr.getAllResponseHeaders();
+          headers = {};
+          _ref = headerString.split('\n');
+          for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+            header = _ref[_i];
+            _ref2 = header.split(/\s*:\s*/), name = _ref2[0], value = _ref2[1];
+            if (!name) continue;
+            if (headers[name]) {
+              if (headers[name] instanceof Array) {
+                headers[name].push(value);
+              } else {
+                headers[name] = [headers[name], value];
+              }
+            } else {
+              if (name) headers[name] = value;
+            }
+          }
+          metadata = {
+            contentType: headers['Content-Type']
+          };
+          for (name in headers) {
+            if (!__hasProp.call(headers, name)) continue;
+            value = headers[name];
+            if (name.indexOf('x-amz-meta-') === 0) {
+              metadata[name.replace('x-amz-meta-', '')] = value;
+            }
+          }
+          return metadata;
+        });
       };
 
       Bucket.prototype.put = function(url, data, options) {
@@ -233,12 +268,11 @@
         }
       }
     ];
-    xmlToObj = function(node, obj) {
+    xmlToObj = function(document) {
+      return xmlToObjRecurse(document.firstChild, {});
+    };
+    xmlToObjRecurse = function(node, obj) {
       var child, len, name, _i, _len, _ref;
-      if (!obj) {
-        node = node.firstChild;
-        obj = {};
-      }
       if (!node.childNodes.length) return null;
       len = node.childNodes.length;
       _ref = node.childNodes;
@@ -250,9 +284,9 @@
         });
         if (node.getElementsByTagName(child.tagName).length > 1) {
           if (!obj[name]) obj[name] = [];
-          obj[name].push(xmlToObj(child, {}));
+          obj[name].push(xmlToObjRecurse(child, {}));
         } else if (child.nodeName && child.nodeName !== '#cdata-section') {
-          obj[name] = xmlToObj(child, {});
+          obj[name] = xmlToObjRecurse(child, {});
         }
       }
       return obj;

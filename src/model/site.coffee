@@ -42,7 +42,7 @@ define ['./model', './collection', './file', 'lib/s3', './folder', './page', './
 		
 		
 		fetch: (options) ->
-			@bucket.list().then (files) =>
+			@bucket.list().make(File).when('fetchMetadata').then (files) =>
 				@files.add files
 				@trigger('fetched', @)
 				@
