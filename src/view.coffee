@@ -39,6 +39,7 @@ define ['app', 'templates/site-menu-item', 'templates/breadcrumb', 'view/sidebar
 			app.files.selected = file
 			app.currentFiles.selected = getDefaultFile(file)
 		else
+			app.files.selected = file.parent
 			app.currentFiles.selected = file
 	
 	

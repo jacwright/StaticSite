@@ -42,6 +42,7 @@
         app.files.selected = file;
         return app.currentFiles.selected = getDefaultFile(file);
       } else {
+        app.files.selected = file.parent;
         return app.currentFiles.selected = file;
       }
     });
