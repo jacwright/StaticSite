@@ -5,6 +5,7 @@ require ['app/auth', 'util/admin-redirect'], (auth) ->
 	$ ->
 		$('body').fadeIn()
 		$('div.alert').hide()
+		$('a.cancel').attr('href', $('a.cancel').attr('href') + location.hash);
 		
 		$('#key').focus()
 		
@@ -21,7 +22,7 @@ require ['app/auth', 'util/admin-redirect'], (auth) ->
 			
 			auth.register(key, secret, username, password, rememberme).then ->
 				auth.login(username, password, rememberme).then ->
-					location.href = './'
+					location.pathname = location.pathname.replace(/[^\/]+$/, '')
 				, (err) ->
 					console.log(err)
 					$('#alerts').slideDown('fast').find('.msg').text(err.message)

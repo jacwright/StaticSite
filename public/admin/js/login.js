@@ -5,6 +5,7 @@
       var siteName;
       $('body').fadeIn();
       $('div.alert').hide();
+      $('a.register-new').attr('href', $('a.register-new').attr('href') + location.hash);
       siteName = location.pathname.split('/')[1];
       if (siteName === 'websights') {
         $('a.cancel').remove();
@@ -21,7 +22,7 @@
         password = $('#password').val();
         rememberme = $('#rememberme').prop('checked');
         return auth.login(username, password, rememberme).then(function() {
-          return location.href = './';
+          return location.pathname = location.pathname.replace(/[^\/]+$/, '');
         }, function(err) {
           console.log(err);
           return $('#alerts').slideDown('fast').find('.msg').text(err.message);

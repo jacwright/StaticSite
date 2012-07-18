@@ -4,6 +4,7 @@
     return $(function() {
       $('body').fadeIn();
       $('div.alert').hide();
+      $('a.cancel').attr('href', $('a.cancel').attr('href') + location.hash);
       $('#key').focus();
       $('#registerform').submit(function(event) {
         var key, password, rememberme, secret, username;
@@ -16,7 +17,7 @@
         rememberme = $('#rememberme').prop('checked');
         return auth.register(key, secret, username, password, rememberme).then(function() {
           return auth.login(username, password, rememberme).then(function() {
-            return location.href = './';
+            return location.pathname = location.pathname.replace(/[^\/]+$/, '');
           }, function(err) {
             console.log(err);
             return $('#alerts').slideDown('fast').find('.msg').text(err.message);

@@ -19,7 +19,7 @@ define ['./model', './collection', './file', 'lib/s3', './folder', './page', './
 			attr?.creationDate = new Date(attr.creationDate)
 			super(attr, opts)
 			
-			@url = "http://#{@name}/"
+			@url = "#{@name}/"
 			@bucket = s3.bucket(@name)
 			@_lookup = {}
 			@files = new File.Collection([], comparator: (file) -> file.id.toLowerCase())
@@ -44,6 +44,7 @@ define ['./model', './collection', './file', 'lib/s3', './folder', './page', './
 		fetch: (options) ->
 			@bucket.list().then (files) =>
 				@files.add files
+				@trigger('fetched', @)
 				@
 		
 	

@@ -67,17 +67,7 @@ require ['app', 'model/file', 'model/folder', 'templates/menu-item', 'templates/
 		$('#menu').delegate 'li', 'click', (event) ->
 			return if $(event.target).closest('.actions').length
 			file = $(this).data 'model'
-			if file.isFolder
-				app.files.selected = file
-			else
-				app.currentFiles.selected = file
-		
-		
-		# open a folder on double click
-#		$('#menu').delegate 'li', 'dblclick', ->
-#			file = $(this).data 'model'
-#			if file.isFolder
-#				app.files.selected = app.currentFiles.get $(this).data('model').id
+			location.hash = '#/' + file.url
 		
 		
 		## FILE ACTIONS

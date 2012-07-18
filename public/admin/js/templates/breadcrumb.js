@@ -5,7 +5,7 @@ function breadcrumb(data,index) {
 
   name = "breadcrumb";
 
-  source = "<% if data.site and app.files.selected is data: %>\n<li class=\"crumb\">\n\t<span class=\"divider\">/</span> <%= data.name %>\n</li>\n<% else if data.site: %>\n<li class=\"crumb\">\n\t<span class=\"divider\">/</span> <a href=\"<%= data.url %>\"><%= data.name %></a>\n</li>\n<% else if app.files.selected and app.siteName: %>\n<li class=\"crumb\">\n\t<a href=\"<%= data.url %>\">Home</a>\n</li>\n<% else if app.files.selected: %>\n<li class=\"crumb\">\n\t<a href=\"<%= data.url %>\"><%= data.name %></a>\n</li>\n<% else if app.siteName: %>\n<li class=\"crumb\">\n\tHome\n</li>\n<% else: %>\n<li class=\"crumb\">\n\t<%= data.name %>\n</li>\n<% end %>\n";
+  source = "<% if data.site and app.files.selected is data: %>\n<li class=\"crumb\">\n\t<span class=\"divider\">/</span> <%= data.name %>\n</li>\n<% else if data.site: %>\n<li class=\"crumb\">\n\t<span class=\"divider\">/</span> <a href=\"#/<%= data.url %>\"><%= data.name %></a>\n</li>\n<% else if app.files.selected and app.siteName: %>\n<li class=\"crumb\">\n\t<a href=\"#/<%= data.url %>\">Home</a>\n</li>\n<% else if app.files.selected: %>\n<li class=\"crumb\">\n\t<a href=\"#/<%= data.url %>\"><%= data.name %></a>\n</li>\n<% else if app.siteName: %>\n<li class=\"crumb\">\n\tHome\n</li>\n<% else: %>\n<li class=\"crumb\">\n\t<%= data.name %>\n</li>\n<% end %>\n";
 
   try {
     __line = 1;
@@ -27,7 +27,7 @@ function breadcrumb(data,index) {
       __line = 6;
       __lines.push('<li class="crumb">\n');
       __line = 7;
-      __lines.push('\t<span class="divider">/</span> <a href="');
+      __lines.push('\t<span class="divider">/</span> <a href="#/');
       __lines.push(this.escape(data.url));
       __lines.push('">');
       __lines.push(this.escape(data.name));
@@ -41,7 +41,7 @@ function breadcrumb(data,index) {
       __line = 10;
       __lines.push('<li class="crumb">\n');
       __line = 11;
-      __lines.push('\t<a href="');
+      __lines.push('\t<a href="#/');
       __lines.push(this.escape(data.url));
       __lines.push('">Home</a>\n');
       __line = 12;
@@ -53,7 +53,7 @@ function breadcrumb(data,index) {
       __line = 14;
       __lines.push('<li class="crumb">\n');
       __line = 15;
-      __lines.push('\t<a href="');
+      __lines.push('\t<a href="#/');
       __lines.push(this.escape(data.url));
       __lines.push('">');
       __lines.push(this.escape(data.name));

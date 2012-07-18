@@ -83,11 +83,7 @@
         var file;
         if ($(event.target).closest('.actions').length) return;
         file = $(this).data('model');
-        if (file.isFolder) {
-          return app.files.selected = file;
-        } else {
-          return app.currentFiles.selected = file;
-        }
+        return location.hash = '#/' + file.url;
       });
       $('#menu').delegate('.actions a', 'click', function(event) {
         return event.preventDefault();

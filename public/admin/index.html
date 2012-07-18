@@ -3,12 +3,12 @@
 <title>Admin</title>
 <script>
 var bucket = location.hostname;
-location.href = 'https://s3.amazonaws.com/' + bucket + '/admin/'
+location.href = 'https://s3.amazonaws.com/' + bucket + '/admin/#/' + bucket + '/';
 </script>
 </head>
 <body>
 <script type="text/javascript">
-document.write('<a href="https://s3.amazonaws.com/' + bucket + '/admin/">Go to admin</a>');
+document.write('<a href="https://s3.amazonaws.com/' + bucket + '/admin/#/' + bucket + '/">Go to admin</a>');
 </script>
 </body>
 </html>

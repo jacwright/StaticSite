@@ -24,7 +24,7 @@
         var _this = this;
         if (attr != null) attr.creationDate = new Date(attr.creationDate);
         Site.__super__.constructor.call(this, attr, opts);
-        this.url = "http://" + this.name + "/";
+        this.url = "" + this.name + "/";
         this.bucket = s3.bucket(this.name);
         this._lookup = {};
         this.files = new File.Collection([], {
@@ -52,6 +52,7 @@
         var _this = this;
         return this.bucket.list().then(function(files) {
           _this.files.add(files);
+          _this.trigger('fetched', _this);
           return _this;
         });
       };

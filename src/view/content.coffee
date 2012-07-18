@@ -40,7 +40,7 @@ require ['app'], (app) ->
 				doc().write """
 				<html>
 				<head>
-				<style>body{text-align:center;margin:0;padding:20px;}img{max-width:100%;max-height:1000px;background-image:url(images/checker.png);-moz-box-shadow: 0px 3px 10px rgba(0, 0, 0, 0.5);-webkit-box-shadow: 0px 3px 10px rgba(0, 0, 0, 0.5);box-shadow: 0px 3px 10px rgba(0, 0, 0, 0.5);}</style>
+				<style>body{text-align:center;margin:0;padding:20px;}img{max-width:100%;max-height:1000px;background-image:url(img/checker.png);-moz-box-shadow: 0px 3px 10px rgba(0, 0, 0, 0.5);-webkit-box-shadow: 0px 3px 10px rgba(0, 0, 0, 0.5);box-shadow: 0px 3px 10px rgba(0, 0, 0, 0.5);}</style>
 				</head>
 				<body>
 				<img src="#{'/' + file.site.name + '/' + file.key}" alt="">
@@ -66,6 +66,8 @@ require ['app'], (app) ->
 	localize = (content, base) ->
 		window.content = content
 		content = content.replace(/(<[^>]*?href=")(\/[^\/])/g, '$1' + base + '$2')
+		content = content.replace(/(<a[^>]*?)(href=")(\/[^\/])/g, '$1target="_parent" $2#$3')
+		content = content.replace(/(<a[^>]*?)(href=")([^#])/g, '$1target="_blank" $2$3')
 		content = content.replace(/(<[^>]*?src=")(\/[^\/])/g, '$1' + base + '$2')
 		return content
 	

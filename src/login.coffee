@@ -5,6 +5,7 @@ require ['app/auth', 'util/admin-redirect'], (auth) ->
 	$ ->
 		$('body').fadeIn()
 		$('div.alert').hide()
+		$('a.register-new').attr('href', $('a.register-new').attr('href') + location.hash);
 		
 		siteName = location.pathname.split('/')[1];
 		if siteName is 'websights'
@@ -26,7 +27,7 @@ require ['app/auth', 'util/admin-redirect'], (auth) ->
 			rememberme = $('#rememberme').prop('checked')
 			
 			auth.login(username, password, rememberme).then ->
-				location.href = './'
+				location.pathname = location.pathname.replace(/[^\/]+$/, '')
 			, (err) ->
 				console.log(err)
 				$('#alerts').slideDown('fast').find('.msg').text(err.message)

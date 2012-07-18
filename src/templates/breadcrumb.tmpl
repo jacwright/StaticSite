@@ -4,15 +4,15 @@
 </li>
 <% else if data.site: %>
 <li class="crumb">
-	<span class="divider">/</span> <a href="<%= data.url %>"><%= data.name %></a>
+	<span class="divider">/</span> <a href="#/<%= data.url %>"><%= data.name %></a>
 </li>
 <% else if app.files.selected and app.siteName: %>
 <li class="crumb">
-	<a href="<%= data.url %>">Home</a>
+	<a href="#/<%= data.url %>">Home</a>
 </li>
 <% else if app.files.selected: %>
 <li class="crumb">
-	<a href="<%= data.url %>"><%= data.name %></a>
+	<a href="#/<%= data.url %>"><%= data.name %></a>
 </li>
 <% else if app.siteName: %>
 <li class="crumb">
