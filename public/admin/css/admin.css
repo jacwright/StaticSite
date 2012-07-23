@@ -51,7 +51,7 @@ html, body {
 	left: 280px;
 	right: 10px;
 }
-#editors {
+#displays {
 	position: absolute;
 	top: 0;
 	bottom: 0;
@@ -59,14 +59,14 @@ html, body {
 	right: 0;
 	overflow: hidden;
 }
-#frame {
+#displays > div > iframe {
 	background-color: #fff;
 	width: 100%;
 	height: 100%;
 	border: none;
 	border-radius: 3px;
 }
-#code-editor {
+#displays > div {
 	width: 100%;
 	height: 100%;
 }

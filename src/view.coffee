@@ -23,13 +23,17 @@ define ['app', 'templates/site-menu-item', 'templates/breadcrumb', 'view/sidebar
 	getDefaultFile = (folder) ->
 		# index first, then first file
 		defaultFile = folder.children.query('name').is('index.html').end().pop()
-		defaultFile = folder.children.query('isFolder').isnt(true).end().shift() unless defaultFile
 		return defaultFile
 	
 	
 	$(window).on 'hashchange', ->
 		url = location.hash.replace('#/', '')
 		file = app.files.query('url').is(url).end().pop()
+		
+		# if the file doesn't exist, choose the error page
+		if not file and url.replace(/[^\/]+\//, '')
+			file = app.files.query('url').is(url.split('/').shift() + '/error.html').end().pop()
+		
 		if not file
 			oldSelection = app.files.selected
 			app.files.selected = null
@@ -39,7 +43,9 @@ define ['app', 'templates/site-menu-item', 'templates/breadcrumb', 'view/sidebar
 			app.files.selected = file
 			app.currentFiles.selected = getDefaultFile(file)
 		else
+			oldSelection = app.files.selected
 			app.files.selected = file.parent
+			app.site.files.trigger('change:selected', app.site.files) unless oldSelection and file.parent
 			app.currentFiles.selected = file
 	
 	

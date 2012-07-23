@@ -22,15 +22,15 @@
     getDefaultFile = function(folder) {
       var defaultFile;
       defaultFile = folder.children.query('name').is('index.html').end().pop();
-      if (!defaultFile) {
-        defaultFile = folder.children.query('isFolder').isnt(true).end().shift();
-      }
       return defaultFile;
     };
     $(window).on('hashchange', function() {
       var file, oldSelection, url;
       url = location.hash.replace('#/', '');
       file = app.files.query('url').is(url).end().pop();
+      if (!file && url.replace(/[^\/]+\//, '')) {
+        file = app.files.query('url').is(url.split('/').shift() + '/error.html').end().pop();
+      }
       if (!file) {
         oldSelection = app.files.selected;
         app.files.selected = null;
@@ -42,7 +42,11 @@
         app.files.selected = file;
         return app.currentFiles.selected = getDefaultFile(file);
       } else {
+        oldSelection = app.files.selected;
         app.files.selected = file.parent;
+        if (!(oldSelection && file.parent)) {
+          app.site.files.trigger('change:selected', app.site.files);
+        }
         return app.currentFiles.selected = file;
       }
     });
