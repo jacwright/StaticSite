@@ -1,11 +1,12 @@
 (function() {
 
   define(['lib/crypto', 'lib/promises', 'lib/s3'], function(crypto, promises, s3) {
-    var aes, bucketName, path, sha1;
+    var aes, path, sha1, siteName;
     sha1 = crypto.sha1, aes = crypto.aes;
     path = 'auth/';
-    bucketName = location.pathname.split('/')[1];
+    siteName = location.hash.replace(/^#\/([^\/]+).*/, '$1');
     return {
+      siteName: siteName,
       login: function(username, password, remember) {
         var deferred, passwordSha, usernameSha;
         deferred = new promises.Deferred();
@@ -46,7 +47,7 @@
       register: function(key, secret, username, password) {
         var bucket, cypher, passwordSha, usernameSha;
         s3.auth(key, secret);
-        bucket = s3.bucket(bucketName);
+        bucket = s3.bucket(siteName);
         usernameSha = sha1(username);
         passwordSha = sha1(password);
         cypher = aes.encrypt([key, secret].join(':'), passwordSha);

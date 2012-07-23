@@ -5,8 +5,10 @@ define ['lib/crypto', 'lib/promises', 'lib/s3'], (crypto, promises, s3) ->
 	{sha1, aes} = crypto
 	
 	path = 'auth/'
-	bucketName = location.pathname.split('/')[1]
+	siteName = location.hash.replace(/^#\/([^\/]+).*/, '$1')
 	
+	
+	siteName: siteName
 	
 	login: (username, password, remember) ->
 		deferred = new promises.Deferred()
@@ -52,7 +54,7 @@ define ['lib/crypto', 'lib/promises', 'lib/s3'], (crypto, promises, s3) ->
 	
 	register: (key, secret, username, password) ->
 		s3.auth key, secret
-		bucket = s3.bucket(bucketName)
+		bucket = s3.bucket(siteName)
 		
 		usernameSha = sha1(username)
 		passwordSha = sha1(password)

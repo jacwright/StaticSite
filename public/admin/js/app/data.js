@@ -9,7 +9,7 @@
 
   s3 = require('../lib/s3').s3;
 
-  bucketName = location.pathname.replace(/^\/([^\/]+).*/, '$1');
+  bucketName = location.hash.replace(/^#\/([^\/]+).*/, '$1');
 
   path = '/' + bucketName + '/admin/';
 

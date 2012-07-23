@@ -54,7 +54,8 @@ define ['app', 'templates/site-menu-item', 'templates/breadcrumb', 'view/sidebar
 	
 	# view code
 	$ ->
-		$('#site-name').text(app.site.name).attr('href', '#/' + app.site.name)
+		$('#site-name').text(app.siteName).attr('href', '#/' + app.siteName)
+		$('#logout').attr('href', $('#logout').attr('href') + '#/' + app.siteName)
 		$('body').fadeIn()
 		
 		$('#signedin-user').text app.username

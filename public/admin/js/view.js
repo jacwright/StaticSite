@@ -54,7 +54,8 @@
       return $(window).trigger('hashchange');
     });
     return $(function() {
-      $('#site-name').text(app.site.name).attr('href', '#/' + app.site.name);
+      $('#site-name').text(app.siteName).attr('href', '#/' + app.siteName);
+      $('#logout').attr('href', $('#logout').attr('href') + '#/' + app.siteName);
       $('body').fadeIn();
       return $('#signedin-user').text(app.username);
     });

@@ -1,10 +1,12 @@
+
+# currently not being used, delete?
 EventEmitter = require('events').EventEmitter
 promises = require('../lib/promises')
 _ = require('underscore')
 s3 = require('../lib/s3').s3
 
 
-bucketName = location.pathname.replace(/^\/([^\/]+).*/, '$1')
+bucketName = location.hash.replace(/^#\/([^\/]+).*/, '$1')
 path = '/' + bucketName + '/admin/'
 bucket = null
 

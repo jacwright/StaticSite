@@ -1,14 +1,12 @@
 (function() {
 
   define(['app/auth', 'model/site', 'model/file'], function(auth, Site, File) {
-    var app, bucket, site;
-    bucket = location.hash.replace(/^#\/([^\/]+).*/, '$1');
+    var app, site;
     site = new Site({
-      name: bucket
+      name: auth.siteName
     });
-    if (!bucket) return;
     app = {
-      siteName: location.pathname.split('/')[1],
+      siteName: auth.siteName,
       username: auth.authorize(),
       site: site,
       files: site.files,

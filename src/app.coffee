@@ -1,12 +1,10 @@
 
 define ['app/auth', 'model/site', 'model/file'], (auth, Site, File) ->
-	bucket = location.hash.replace(/^#\/([^\/]+).*/, '$1')
-	site = new Site(name: bucket)
+	site = new Site(name: auth.siteName)
 	
-	return unless bucket
 	
 	app =
-		siteName: location.pathname.split('/')[1]
+		siteName: auth.siteName
 		username: auth.authorize()
 		site: site
 		files: site.files
