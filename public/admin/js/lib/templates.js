@@ -1,5 +1,5 @@
 (function() {
-  var __hasProp = Object.prototype.hasOwnProperty;
+  var __hasProp = {}.hasOwnProperty;
 
   define(['lib/backbone'], function(backbone) {
     var become, get, getOnChange, helpers, linkify, module, superCleanData, templates;
@@ -7,12 +7,18 @@
     templates = {};
     module.get = get = function(templateFunction, data, opts) {
       var elem, html, onChange;
-      if (data == null) data = {};
-      if (opts == null) opts = {};
+      if (data == null) {
+        data = {};
+      }
+      if (opts == null) {
+        opts = {};
+      }
       if (typeof templateFunction === 'string') {
         templateFunction = templates[templateFunction];
       }
-      if (!templateFunction) throw new Error('Template is undefined');
+      if (!templateFunction) {
+        throw new Error('Template is undefined');
+      }
       if (data instanceof Array || (Backbone && data instanceof Backbone.Collection)) {
         if (opts.textOnly) {
           elem = data.map(function(data, index) {
@@ -30,7 +36,9 @@
         }
       } else {
         html = templateFunction(data, opts.index);
-        if (opts.textOnly) return html;
+        if (opts.textOnly) {
+          return html;
+        }
         elem = $(html).data('model', data);
         elem.find('[data-template][data-data]').each(function() {
           var propertyName, sub;
@@ -57,12 +65,14 @@
     };
     superCleanData = $.cleanData;
     $.cleanData = function(elems) {
-      var elem, id, _i, _len, _ref, _ref2;
+      var elem, id, _i, _len, _ref, _ref1;
       for (_i = 0, _len = elems.length; _i < _len; _i++) {
         elem = elems[_i];
-        if (elem.nodeName && jQuery.noData[elem.nodeName.toLowerCase()]) continue;
+        if (elem.nodeName && jQuery.noData[elem.nodeName.toLowerCase()]) {
+          continue;
+        }
         id = elem[jQuery.expando];
-        if (id && ((_ref = jQuery.cache[id]) != null ? (_ref2 = _ref.events) != null ? _ref2.removing : void 0 : void 0)) {
+        if (id && ((_ref = jQuery.cache[id]) != null ? (_ref1 = _ref.events) != null ? _ref1.removing : void 0 : void 0)) {
           $(elem).trigger('removing');
         }
       }

@@ -1,7 +1,7 @@
 (function() {
-  var __hasProp = Object.prototype.hasOwnProperty,
-    __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor; child.__super__ = parent.prototype; return child; },
-    __slice = Array.prototype.slice;
+  var __hasProp = {}.hasOwnProperty,
+    __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
+    __slice = [].slice;
 
   define(['./file', './folder', 'lib/promises'], function(File, Folder, promises) {
     var AdminFolder, HiddenFiles, SettingsFile, TemplatesFolder, settingsCID;
@@ -42,7 +42,9 @@
       SettingsFile.prototype.nonStandard = true;
 
       function SettingsFile(attr, opts) {
-        if (attr == null) attr = {};
+        if (attr == null) {
+          attr = {};
+        }
         attr.key = 'admin/settings';
         SettingsFile.__super__.constructor.call(this, attr, opts);
         settingsCID = this.cid;
@@ -64,7 +66,7 @@
       __extends(TemplatesFolder, _super);
 
       function TemplatesFolder() {
-        TemplatesFolder.__super__.constructor.apply(this, arguments);
+        return TemplatesFolder.__super__.constructor.apply(this, arguments);
       }
 
       TemplatesFolder.prototype.nonStandard = true;

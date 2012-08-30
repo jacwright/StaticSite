@@ -38,7 +38,7 @@
           app.site.files.trigger('change:selected', app.site.files);
         }
         return app.currentFiles.selected = getDefaultFile(app.site);
-      } else if (file.isFolder) {
+      } else if (file.type.split('-').pop() === 'folder') {
         app.files.selected = file;
         return app.currentFiles.selected = getDefaultFile(file);
       } else {

@@ -37,13 +37,21 @@
         results.contents.forEach(function(item) {
           var collection, full, id, match, type;
           match = item.key.match(urlExp);
-          if (!match) return;
+          if (!match) {
+            return;
+          }
           full = match[0], type = match[1], id = match[2];
-          if (!data.collections.hasOwnProperty(type)) return;
+          if (!data.collections.hasOwnProperty(type)) {
+            return;
+          }
           collection = data.collections[type];
-          if (!has[type]) has[type] = {};
+          if (!has[type]) {
+            has[type] = {};
+          }
           has[type][id] = true;
-          if (collection.get(id) && collection.get(id).etag === item.etag) return;
+          if (collection.get(id) && collection.get(id).etag === item.etag) {
+            return;
+          }
           return promise = promise.then(bucket.get(item.key).then(function(data) {
             data = JSON.parse(data);
             data.id = id;
@@ -62,7 +70,9 @@
           remove = [];
           collection = data.collections[type];
           collection.each(function(item) {
-            if (!ids[item.id]) return remove.push(item);
+            if (!ids[item.id]) {
+              return remove.push(item);
+            }
           });
           _results.push(collection.remove(remove, options));
         }

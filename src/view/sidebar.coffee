@@ -1,5 +1,5 @@
 
-require ['app', 'model/file', 'model/folder', 'templates/menu-item', 'templates/new-file'], (app, File, Folder, menuItem, newFile) ->
+require ['app', 'model/file', 'templates/menu-item', 'templates/new-file'], (app, File, menuItem, newFile) ->
 	
 	
 	onFileAdd = (file, files, options) ->
@@ -111,7 +111,7 @@ require ['app', 'model/file', 'model/folder', 'templates/menu-item', 'templates/
 				name = name.replace /(-(\d+))?\/$/, (match, appended, num) ->
 					return '-' + (parseInt(num) + 1 or 2) + '/'
 			
-			file = new Folder key: name, lastModified: new Date()
+			file = new File key: name, lastModified: new Date(), type: 'folder'
 			app.files.add file
 			app.currentFiles.add file
 			editName file, true

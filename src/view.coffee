@@ -39,7 +39,7 @@ define ['app', 'templates/site-menu-item', 'templates/breadcrumb', 'view/sidebar
 			app.files.selected = null
 			app.site.files.trigger('change:selected', app.site.files) unless oldSelection
 			app.currentFiles.selected = getDefaultFile(app.site)
-		else if file.isFolder
+		else if file.type.split('-').pop() is 'folder'
 			app.files.selected = file
 			app.currentFiles.selected = getDefaultFile(file)
 		else

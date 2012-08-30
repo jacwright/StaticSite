@@ -1,6 +1,6 @@
 (function() {
   var __bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
-    __slice = Array.prototype.slice;
+    __slice = [].slice;
 
   define(function() {
     var Deferred, Promise, args, finish, notify, promiseWhen, promiseWhenAll;
@@ -8,7 +8,9 @@
 
       function Promise() {
         this.when = __bind(this.when, this);
+
         this.call = __bind(this.call, this);
+
       }
 
       Promise.prototype.then = function(fulfilledHandler, failedHandler, progressHandler, cancelHandler) {
@@ -37,7 +39,9 @@
 
       Promise.prototype.apply = function(handler, context) {
         return this.then(function(result) {
-          if ((result instanceof Array)(handler.apply(context, result))) {} else {
+          if ((result instanceof Array)(handler.apply(context, result))) {
+
+          } else {
             return handler.call(context, result);
           }
         });
@@ -103,13 +107,15 @@
         args = 1 <= arguments.length ? __slice.call(arguments, 0) : [];
         return this.then(function(object) {
           var result;
-          if (object instanceof Array) result = object[method].apply(object, args);
+          if (object instanceof Array) {
+            result = object[method].apply(object, args);
+          }
           return result != null ? result : object;
         });
       };
     });
     promiseWhen = function() {
-      var count, createCallback, deferred, failed, failedCallback, finishedCallback, fulfilledCallback, name, obj, params, _len;
+      var count, createCallback, deferred, failed, failedCallback, finishedCallback, fulfilledCallback, name, obj, params, _i, _len;
       params = 1 <= arguments.length ? __slice.call(arguments, 0) : [];
       deferred = new Deferred;
       count = params.length;
@@ -133,7 +139,7 @@
           }
         };
       };
-      for (name = 0, _len = params.length; name < _len; name++) {
+      for (name = _i = 0, _len = params.length; _i < _len; name = ++_i) {
         obj = params[name];
         if (obj && typeof obj.then === 'function') {
           finishedCallback = createCallback(name);
@@ -143,7 +149,9 @@
           --count;
         }
       }
-      if (count === 0) deferred.fulfill.apply(deferred, params);
+      if (count === 0) {
+        deferred.fulfill.apply(deferred, params);
+      }
       return deferred.promise;
     };
     promiseWhenAll = function(promises) {
@@ -171,12 +179,19 @@
       function Deferred(promise) {
         var cancel,
           _this = this;
-        if (promise == null) promise = new Deferred.Promise;
+        if (promise == null) {
+          promise = new Deferred.Promise;
+        }
         this.progress = __bind(this.progress, this);
+
         this.cancel = __bind(this.cancel, this);
+
         this.fail = __bind(this.fail, this);
+
         this.fulfill = __bind(this.fulfill, this);
+
         this.then = __bind(this.then, this);
+
         this.promise = promise;
         this.status = 'unfulfilled';
         this.progressHandlers = [];
@@ -193,7 +208,9 @@
 
       Deferred.prototype.then = function(fulfilledHandler, failedHandler, progressHandler, canceledHandler) {
         var handler, nextDeferred;
-        if (progressHandler) this.progressHandlers.push(progressHandler);
+        if (progressHandler) {
+          this.progressHandlers.push(progressHandler);
+        }
         nextDeferred = new Deferred;
         nextDeferred.promise.prev = this.promise;
         handler = {
@@ -217,7 +234,9 @@
       Deferred.prototype.fulfill = function() {
         var params, _ref;
         params = 1 <= arguments.length ? __slice.call(arguments, 0) : [];
-        if ((_ref = params[0]) != null ? _ref.isArgs : void 0) params = params[0];
+        if ((_ref = params[0]) != null ? _ref.isArgs : void 0) {
+          params = params[0];
+        }
         return finish.call(this, 'fulfilled', params);
       };
 
@@ -263,7 +282,9 @@
     })();
     finish = function(status, results) {
       var handler, _i, _len, _ref, _results;
-      if (this.status !== 'unfulfilled') return;
+      if (this.status !== 'unfulfilled') {
+        return;
+      }
       clearTimeout(this._timeout);
       this.status = status;
       this.results = results;
@@ -294,7 +315,7 @@
       } else {
         deferred.fulfill(nextResult);
       }
-      return;
+      return void 0;
     };
     Deferred.Promise = Promise;
     if (!Function.prototype.bind) {
@@ -326,7 +347,9 @@
           var args, callback, deferred;
           args = 1 <= arguments.length ? __slice.call(arguments, 0) : [];
           deferred = new Deferred(promise);
-          if (typeof args[args.length - 1] === 'function') callback = args.pop();
+          if (typeof args[args.length - 1] === 'function') {
+            callback = args.pop();
+          }
           args.push(function() {
             var err, results;
             err = arguments[0], results = 2 <= arguments.length ? __slice.call(arguments, 1) : [];

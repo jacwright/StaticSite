@@ -1,5 +1,5 @@
 (function() {
-  var __hasProp = Object.prototype.hasOwnProperty;
+  var __hasProp = {}.hasOwnProperty;
 
   define(['./date', './crypto', './promises'], function(_date_, crypto, promises) {
     var Bucket, addQueryParams, base64, hmac, key, md5, mimeTypes, processMimeTypes, s3, secret, sha1, signedHeader, toType, types, utf8, xmlToObj, xmlToObjRecurse;
@@ -30,7 +30,9 @@
       },
       load: function(options) {
         var amz, amzString, contentMD5, contentType, data, date, deferred, ext, headers, lowered, method, name, params, request, resource, signature, stringToSign, url, value, _ref;
-        if (options == null) options = {};
+        if (options == null) {
+          options = {};
+        }
         headers = options.headers || {};
         for (name in headers) {
           if (!__hasProp.call(headers, name)) continue;
@@ -62,12 +64,17 @@
           }));
         }
         headers['x-amz-date'] = date;
-        if (options.acl) headers['x-amz-acl'] = options.acl;
-        if (options.meta) {
-          _ref = options.meta;
+        if (options.acl) {
+          headers['x-amz-acl'] = options.acl;
+        }
+        if (options.metadata) {
+          _ref = options.metadata;
           for (name in _ref) {
             if (!__hasProp.call(_ref, name)) continue;
             value = _ref[name];
+            if (name === 'contentType' || name === 'lastModified') {
+              continue;
+            }
             value = value.replace(/\n/g, ' ');
             headers['x-amz-meta-' + name.toLowerCase()] = value;
           }
@@ -75,11 +82,15 @@
         for (name in headers) {
           if (!__hasProp.call(headers, name)) continue;
           value = headers[name];
-          if (name.slice(0, 6) === 'x-amz-') amz.push(name + ':' + value);
+          if (name.slice(0, 6) === 'x-amz-') {
+            amz.push(name + ':' + value);
+          }
         }
         if (!options.anonymous) {
           amzString = '';
-          if (amz.length) amzString = amz.sort().join('\n') + '\n';
+          if (amz.length) {
+            amzString = amz.sort().join('\n') + '\n';
+          }
           stringToSign = [method.toUpperCase(), contentMD5, contentType, '', amzString + resource].join('\n');
           signature = base64.encrypt(hmac(sha1, utf8.encode(stringToSign), secret, {
             asBytes: true
@@ -120,7 +131,9 @@
           method: 'get',
           url: url
         });
-        if (folder) (options.params || (options.params = {})).prefix = folder;
+        if (folder) {
+          (options.params || (options.params = {})).prefix = folder;
+        }
         return s3.load(options).then(xmlToObj).then(function(results) {
           if (results.contents instanceof Array) {
             return results.contents;
@@ -148,14 +161,16 @@
           url: url
         });
         return s3.load(options).then(function(results, xhr) {
-          var header, headerString, headers, metadata, name, value, _i, _len, _ref, _ref2;
+          var header, headerString, headers, metadata, name, value, _i, _len, _ref, _ref1;
           headerString = xhr.getAllResponseHeaders();
           headers = {};
-          _ref = headerString.split('\n');
+          _ref = headerString.split('\r\n');
           for (_i = 0, _len = _ref.length; _i < _len; _i++) {
             header = _ref[_i];
-            _ref2 = header.split(/\s*:\s*/), name = _ref2[0], value = _ref2[1];
-            if (!name) continue;
+            _ref1 = header.split(/\s*:\s*/), name = _ref1[0], value = _ref1[1];
+            if (!name) {
+              continue;
+            }
             if (headers[name]) {
               if (headers[name] instanceof Array) {
                 headers[name].push(value);
@@ -163,11 +178,14 @@
                 headers[name] = [headers[name], value];
               }
             } else {
-              if (name) headers[name] = value;
+              if (name) {
+                headers[name] = value;
+              }
             }
           }
           metadata = {
-            contentType: headers['Content-Type']
+            contentType: headers['Content-Type'],
+            lastModified: new Date(headers['Last-Modified']).getTime()
           };
           for (name in headers) {
             if (!__hasProp.call(headers, name)) continue;
@@ -181,7 +199,9 @@
       };
 
       Bucket.prototype.put = function(url, data, options) {
-        if (options == null) options = {};
+        if (options == null) {
+          options = {};
+        }
         url = this.url + url;
         options = $.extend(options, {
           method: 'put',
@@ -192,7 +212,9 @@
       };
 
       Bucket.prototype.copy = function(url, newUrl, options) {
-        if (options == null) options = {};
+        if (options == null) {
+          options = {};
+        }
         url = this.url + url;
         newUrl = this.url + newUrl;
         options = $.extend(options, {
@@ -218,10 +240,10 @@
 
     })();
     addQueryParams = function(url, params) {
-      var index, name, query, value, _len;
+      var index, name, query, value, _i, _len;
       query = params instanceof Array ? params : [];
       if (params && params !== query) {
-        for (value = 0, _len = params.length; value < _len; value++) {
+        for (value = _i = 0, _len = params.length; _i < _len; value = ++_i) {
           name = params[value];
           query.push(name + '=' + encodeURIComponent(value));
         }
@@ -238,10 +260,14 @@
     };
     toType = function(value) {
       var match, type, _i, _len;
-      if (typeof value !== 'string') return value;
+      if (typeof value !== 'string') {
+        return value;
+      }
       for (_i = 0, _len = types.length; _i < _len; _i++) {
         type = types[_i];
-        if ((match = value.match(type.exp))) return type.cast(match);
+        if ((match = value.match(type.exp))) {
+          return type.cast(match);
+        }
       }
       return value;
     };
@@ -273,17 +299,23 @@
     };
     xmlToObjRecurse = function(node, obj) {
       var child, len, name, _i, _len, _ref;
-      if (!node.childNodes.length) return null;
+      if (!node.childNodes.length) {
+        return null;
+      }
       len = node.childNodes.length;
       _ref = node.childNodes;
       for (_i = 0, _len = _ref.length; _i < _len; _i++) {
         child = _ref[_i];
-        if (len === 1 && child.nodeType === 3) return child.nodeValue;
+        if (len === 1 && child.nodeType === 3) {
+          return child.nodeValue;
+        }
         name = child.nodeName.replace(/^[A-Z]/, function(match) {
           return match.toLowerCase();
         });
         if (node.getElementsByTagName(child.tagName).length > 1) {
-          if (!obj[name]) obj[name] = [];
+          if (!obj[name]) {
+            obj[name] = [];
+          }
           obj[name].push(xmlToObjRecurse(child, {}));
         } else if (child.nodeName && child.nodeName !== '#cdata-section') {
           obj[name] = xmlToObjRecurse(child, {});
@@ -483,10 +515,14 @@
     processMimeTypes = function() {
       return navigator.mimeTypes.forEach(function(mimeType) {
         var type;
-        if (!mimeType.suffixes) return;
+        if (!mimeType.suffixes) {
+          return;
+        }
         type = mimeType.type;
         return mimeType.suffixes.split(',').forEach(function(suffix) {
-          if (!mimeTypes.hasOwnProperty(suffix)) return mimeTypes[suffix] = type;
+          if (!mimeTypes.hasOwnProperty(suffix)) {
+            return mimeTypes[suffix] = type;
+          }
         });
       });
     };

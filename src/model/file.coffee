@@ -38,25 +38,60 @@ define ['./model', './collection', 'lib/promises'], (Model, Collection, promises
 	
 	
 	
+	class FileType extends Model
+		@registered: []
+		@attr 'name'
+		@attr 'icon'
+		@attr 'matches'
+		
+		@register: (fileType) ->
+			if @registered[fileType.name] and (index = @registered.indexOf(@registered[fileType.name]))
+				@registered.splice(index, 1)
+			@registered.push fileType
+			@registered[fileType.name] = fileType
+		
+		@get: (type) ->
+			@registered[type]
+		
+		@matches: (file) ->
+			registered = @registered
+			
+			for i in [registered.length..1]
+				fileType = registered[i - 1]
+				return fileType if fileType.matches(file)
+			console.log('no file type for', file)
+		
+		constructor: (attr, opts) ->
+			super(attr, opts)
+		
+	
+	
+	# default file type will match any
+	FileType.register new FileType(name: 'file', icon: 'page', matches: -> true)
+	FileType.register new FileType(name: 'folder', icon: 'folder', matches: (attr) -> attr.key.slice(-1) is '/')
+	
+	
 	class File extends Model
 		
 		@subclasses = []
 		idAttribute: 'key'
-		icon: 'page'
 		
 		@attr 'key'
 		@attr 'lastModified'
+		@attr 'metadata'
 		@prop 'name'
 		@prop 'url'
 		@prop 'content'
+		@prop 'fileType'
+		@def 'type',
+			get: -> @fileType.name
+			set: (value) -> @fileType = FileType.registered[value]
+		@def 'icon',
+			get: -> @fileType.icon
 		
 		constructor: (attr, opts) ->
-			# handle subtypes, but not when constructor is being called as "super"
-			if @constructor is File
-				subclass = File.subclasses.filter( (subclass) -> subclass.match(attr) ).pop()
-				return new subclass(attr, opts) if subclass
-			
-			
+			type = attr.type
+			delete attr.type
 			attr.lastModified = new Date(attr.lastModified) if attr?.lastModified?
 			super(attr, opts)
 			
@@ -70,6 +105,8 @@ define ['./model', './collection', 'lib/promises'], (Model, Collection, promises
 			@children.on 'add', (file) =>
 				file.parent.remove(file) if file.parent
 				file.parent = this
+			
+			@type = type if type
 		
 		
 		keyFromName: (name) -> @id.replace fileName, name + '$2'
@@ -114,21 +151,19 @@ define ['./model', './collection', 'lib/promises'], (Model, Collection, promises
 		
 		save: (options) ->
 			return if @content is undefined
-			@site.bucket.put(@id, @content)
+			@site.bucket.put(@id, @content, metadata: @metadata)
 			
 		
 		
 		fetchMetadata: (options) ->
 			if app.cache[@id]?.lastModified is @lastModified.getTime()
-				delete app.cache[@id].lastModified
 				promise = promises.fulfilled app.cache[@id]
 			else
 				promise = app.site.bucket.metadata(@id)
 			
 			promise.then (metadata) =>
-				for name, value of metadata
-					@[name] = value
-				metadata.lastModified = @lastModified.getTime()
+				@metadata = metadata
+				@fileType = FileType.matches(@) unless @fileType
 				app.cache[@id] = metadata
 				@
 		
@@ -143,22 +178,11 @@ define ['./model', './collection', 'lib/promises'], (Model, Collection, promises
 	class FileCollection extends Collection
 		model: File
 		comparator: childSort
-		
-		_prepareModel: (model, options = {}) ->
-			unless model instanceof Model
-				modelClass = @model
-				attrs = model
-				options.collection = this
-				
-				File.subclasses.forEach (subclass) ->
-					if subclass.match(attrs)
-						modelClass = subclass
-				
-				model = new modelClass(attrs, options)
-			super(model, options)
 	
 	
 	File.Collection = FileCollection
+	File.Type = FileType
+	
 	
 	
 	return File

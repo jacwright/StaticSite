@@ -52,8 +52,9 @@ define ['./date', './crypto', './promises'], (_date_, crypto, promises) ->
 			headers['x-amz-date'] = date
 			headers['x-amz-acl'] = options.acl if options.acl
 			
-			if options.meta
-				for own name, value of options.meta
+			if options.metadata
+				for own name, value of options.metadata
+					continue if name is 'contentType' or name is 'lastModified'
 					value = value.replace(/\n/g, ' ')
 					headers['x-amz-meta-' + name.toLowerCase()] = value
 			
@@ -141,7 +142,7 @@ define ['./date', './crypto', './promises'], (_date_, crypto, promises) ->
 				headerString = xhr.getAllResponseHeaders()
 				headers = {}
 				
-				for header in headerString.split('\n')
+				for header in headerString.split('\r\n')
 					[name, value] = header.split(/\s*:\s*/)
 					continue unless name
 					if headers[name]
@@ -153,7 +154,8 @@ define ['./date', './crypto', './promises'], (_date_, crypto, promises) ->
 						headers[name] = value if name
 				
 				metadata =
-					contentType: headers['Content-Type']	
+					contentType: headers['Content-Type']
+					lastModified: new Date(headers['Last-Modified']).getTime()
 				
 				for own name, value of headers
 					if name.indexOf('x-amz-meta-') is 0

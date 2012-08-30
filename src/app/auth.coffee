@@ -4,8 +4,8 @@ define ['lib/crypto', 'lib/promises', 'lib/s3'], (crypto, promises, s3) ->
 	
 	{sha1, aes} = crypto
 	
-	path = 'auth/'
 	siteName = location.hash.replace(/^#\/([^\/]+).*/, '$1')
+	path = "/#{siteName}/admin/auth/"
 	
 	
 	siteName: siteName

@@ -1,9 +1,9 @@
 (function() {
-  var __hasProp = Object.prototype.hasOwnProperty,
-    __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor; child.__super__ = parent.prototype; return child; };
+  var __hasProp = {}.hasOwnProperty,
+    __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
 
   define(['./model', './collection', 'lib/promises'], function(Model, Collection, promises) {
-    var File, FileCollection, childSort, escapeRegex, extention, fileName, getExtention, icons, onKeyChange;
+    var File, FileCollection, FileType, childSort, escapeRegex, extention, fileName, getExtention, icons, onKeyChange;
     fileName = /([^\/]+)(\/)?$/;
     extention = /\.(\w+)$$/;
     icons = {
@@ -21,9 +21,13 @@
     };
     childSort = function(a, b) {
       a = a.id.toLowerCase();
-      if (a.slice(-1) === '/') a = '/' + a;
+      if (a.slice(-1) === '/') {
+        a = '/' + a;
+      }
       b = b.id.toLowerCase();
-      if (b.slice(-1) === '/') b = '/' + b;
+      if (b.slice(-1) === '/') {
+        b = '/' + b;
+      }
       if (a < b) {
         return -1;
       } else {
@@ -32,7 +36,9 @@
     };
     onKeyChange = function(model, key) {
       var ext, _ref;
-      if (!key) return;
+      if (!key) {
+        return;
+      }
       model.name = key.match(fileName)[1];
       model.url = ((_ref = model.site) != null ? _ref.url : void 0) + key;
       ext = getExtention(key);
@@ -42,6 +48,64 @@
         return delete model.icon;
       }
     };
+    FileType = (function(_super) {
+
+      __extends(FileType, _super);
+
+      FileType.registered = [];
+
+      FileType.attr('name');
+
+      FileType.attr('icon');
+
+      FileType.attr('matches');
+
+      FileType.register = function(fileType) {
+        var index;
+        if (this.registered[fileType.name] && (index = this.registered.indexOf(this.registered[fileType.name]))) {
+          this.registered.splice(index, 1);
+        }
+        this.registered.push(fileType);
+        return this.registered[fileType.name] = fileType;
+      };
+
+      FileType.get = function(type) {
+        return this.registered[type];
+      };
+
+      FileType.matches = function(file) {
+        var fileType, i, registered, _i, _ref;
+        registered = this.registered;
+        for (i = _i = _ref = registered.length; _ref <= 1 ? _i <= 1 : _i >= 1; i = _ref <= 1 ? ++_i : --_i) {
+          fileType = registered[i - 1];
+          if (fileType.matches(file)) {
+            return fileType;
+          }
+        }
+        return console.log('no file type for', file);
+      };
+
+      function FileType(attr, opts) {
+        FileType.__super__.constructor.call(this, attr, opts);
+      }
+
+      return FileType;
+
+    })(Model);
+    FileType.register(new FileType({
+      name: 'file',
+      icon: 'page',
+      matches: function() {
+        return true;
+      }
+    }));
+    FileType.register(new FileType({
+      name: 'folder',
+      icon: 'folder',
+      matches: function(attr) {
+        return attr.key.slice(-1) === '/';
+      }
+    }));
     File = (function(_super) {
 
       __extends(File, _super);
@@ -50,11 +114,11 @@
 
       File.prototype.idAttribute = 'key';
 
-      File.prototype.icon = 'page';
-
       File.attr('key');
 
       File.attr('lastModified');
+
+      File.attr('metadata');
 
       File.prop('name');
 
@@ -62,15 +126,28 @@
 
       File.prop('content');
 
-      function File(attr, opts) {
-        var subclass,
-          _this = this;
-        if (this.constructor === File) {
-          subclass = File.subclasses.filter(function(subclass) {
-            return subclass.match(attr);
-          }).pop();
-          if (subclass) return new subclass(attr, opts);
+      File.prop('fileType');
+
+      File.def('type', {
+        get: function() {
+          return this.fileType.name;
+        },
+        set: function(value) {
+          return this.fileType = FileType.registered[value];
         }
+      });
+
+      File.def('icon', {
+        get: function() {
+          return this.fileType.icon;
+        }
+      });
+
+      function File(attr, opts) {
+        var type,
+          _this = this;
+        type = attr.type;
+        delete attr.type;
         if ((attr != null ? attr.lastModified : void 0) != null) {
           attr.lastModified = new Date(attr.lastModified);
         }
@@ -84,9 +161,14 @@
           return file.parent = null;
         });
         this.children.on('add', function(file) {
-          if (file.parent) file.parent.remove(file);
+          if (file.parent) {
+            file.parent.remove(file);
+          }
           return file.parent = _this;
         });
+        if (type) {
+          this.type = type;
+        }
       }
 
       File.prototype.keyFromName = function(name) {
@@ -145,26 +227,27 @@
       };
 
       File.prototype.save = function(options) {
-        if (this.content === void 0) return;
-        return this.site.bucket.put(this.id, this.content);
+        if (this.content === void 0) {
+          return;
+        }
+        return this.site.bucket.put(this.id, this.content, {
+          metadata: this.metadata
+        });
       };
 
       File.prototype.fetchMetadata = function(options) {
         var promise, _ref,
           _this = this;
         if (((_ref = app.cache[this.id]) != null ? _ref.lastModified : void 0) === this.lastModified.getTime()) {
-          delete app.cache[this.id].lastModified;
           promise = promises.fulfilled(app.cache[this.id]);
         } else {
           promise = app.site.bucket.metadata(this.id);
         }
         return promise.then(function(metadata) {
-          var name, value;
-          for (name in metadata) {
-            value = metadata[name];
-            _this[name] = value;
+          _this.metadata = metadata;
+          if (!_this.fileType) {
+            _this.fileType = FileType.matches(_this);
           }
-          metadata.lastModified = _this.lastModified.getTime();
           app.cache[_this.id] = metadata;
           return _this;
         });
@@ -186,32 +269,18 @@
       __extends(FileCollection, _super);
 
       function FileCollection() {
-        FileCollection.__super__.constructor.apply(this, arguments);
+        return FileCollection.__super__.constructor.apply(this, arguments);
       }
 
       FileCollection.prototype.model = File;
 
       FileCollection.prototype.comparator = childSort;
 
-      FileCollection.prototype._prepareModel = function(model, options) {
-        var attrs, modelClass;
-        if (options == null) options = {};
-        if (!(model instanceof Model)) {
-          modelClass = this.model;
-          attrs = model;
-          options.collection = this;
-          File.subclasses.forEach(function(subclass) {
-            if (subclass.match(attrs)) return modelClass = subclass;
-          });
-          model = new modelClass(attrs, options);
-        }
-        return FileCollection.__super__._prepareModel.call(this, model, options);
-      };
-
       return FileCollection;
 
     })(Collection);
     File.Collection = FileCollection;
+    File.Type = FileType;
     return File;
   });
 

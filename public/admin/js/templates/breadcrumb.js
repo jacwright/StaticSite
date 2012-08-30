@@ -1,7 +1,7 @@
 define(['lib/templates'], function (templates) {
 
 function breadcrumb(data,index) {
-  var i, line, lineNumber, lines, name, source, __line, __lines, _len;
+  var i, line, lineNumber, lines, name, source, __line, __lines, _i, _len;
 
   name = "breadcrumb";
 
@@ -91,7 +91,7 @@ function breadcrumb(data,index) {
     return __lines.join('');
   } catch (error) {
     lines = source.split(/\n/);
-    for (i = 0, _len = lines.length; i < _len; i++) {
+    for (i = _i = 0, _len = lines.length; _i < _len; i = ++_i) {
       line = lines[i];
       lineNumber = i < 9 ? '  ' + (i + 1) : i < 109 ? ' ' + (i + 1) : i + 1;
       lines[i] = (i === __line - 1 ? "=>|" + lineNumber + "|" : "  |" + lineNumber + "|") + line;

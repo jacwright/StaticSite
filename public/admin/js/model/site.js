@@ -1,6 +1,6 @@
 (function() {
-  var __hasProp = Object.prototype.hasOwnProperty,
-    __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor; child.__super__ = parent.prototype; return child; };
+  var __hasProp = {}.hasOwnProperty,
+    __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
 
   define(['./model', './collection', './file', 'lib/s3', './folder', './page', './admin-files'], function(Model, Collection, File, s3) {
     var Site, SiteCollection, fileName, trailingSlash;
@@ -22,7 +22,9 @@
 
       function Site(attr, opts) {
         var _this = this;
-        if (attr != null) attr.creationDate = new Date(attr.creationDate);
+        if (attr != null) {
+          attr.creationDate = new Date(attr.creationDate);
+        }
         Site.__super__.constructor.call(this, attr, opts);
         this.url = "" + this.name + "/";
         this.bucket = s3.bucket(this.name);
@@ -65,7 +67,7 @@
       __extends(SiteCollection, _super);
 
       function SiteCollection() {
-        SiteCollection.__super__.constructor.apply(this, arguments);
+        return SiteCollection.__super__.constructor.apply(this, arguments);
       }
 
       SiteCollection.prototype.model = Site;

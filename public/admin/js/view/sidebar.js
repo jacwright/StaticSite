@@ -1,6 +1,6 @@
 (function() {
 
-  require(['app', 'model/file', 'model/folder', 'templates/menu-item', 'templates/new-file'], function(app, File, Folder, menuItem, newFile) {
+  require(['app', 'model/file', 'templates/menu-item', 'templates/new-file'], function(app, File, menuItem, newFile) {
     var editName, onFileAdd;
     onFileAdd = function(file, files, options) {
       var nextFile;
@@ -31,7 +31,9 @@
     });
     editName = function(file, isNew) {
       var cancel, done, input, item, save;
-      if (isNew == null) isNew = false;
+      if (isNew == null) {
+        isNew = false;
+      }
       item = $("#menu li[data-id=" + file.cid + "]");
       input = $('<input name="name" type="text">').val(file.name).appendTo(item.find('h5'));
       input.focus();
@@ -81,7 +83,9 @@
       });
       $('#menu').delegate('li', 'click', function(event) {
         var file;
-        if ($(event.target).closest('.actions').length) return;
+        if ($(event.target).closest('.actions').length) {
+          return;
+        }
         file = $(this).data('model');
         return location.hash = '#/' + file.url;
       });
@@ -113,15 +117,18 @@
         var file, name;
         event.preventDefault();
         name = 'new-folder/';
-        if (app.files.selected) name = app.files.selected.key + name;
+        if (app.files.selected) {
+          name = app.files.selected.key + name;
+        }
         while (app.currentFiles.get(name)) {
           name = name.replace(/(-(\d+))?\/$/, function(match, appended, num) {
             return '-' + (parseInt(num) + 1 || 2) + '/';
           });
         }
-        file = new Folder({
+        file = new File({
           key: name,
-          lastModified: new Date()
+          lastModified: new Date(),
+          type: 'folder'
         });
         app.files.add(file);
         app.currentFiles.add(file);

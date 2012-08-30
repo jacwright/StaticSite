@@ -3,8 +3,8 @@
   define(['lib/crypto', 'lib/promises', 'lib/s3'], function(crypto, promises, s3) {
     var aes, path, sha1, siteName;
     sha1 = crypto.sha1, aes = crypto.aes;
-    path = 'auth/';
     siteName = location.hash.replace(/^#\/([^\/]+).*/, '$1');
+    path = "/" + siteName + "/admin/auth/";
     return {
       siteName: siteName,
       login: function(username, password, remember) {
@@ -25,7 +25,9 @@
           s3.auth(key, secret);
           creds = username + ':' + key + ':' + secret;
           sessionStorage.setItem('creds', creds);
-          if (remember) localStorage.setItem('creds', creds);
+          if (remember) {
+            localStorage.setItem('creds', creds);
+          }
           return deferred.fulfill();
         }, function() {
           return deferred.fail(new Error('Incorrect Username'));
@@ -37,9 +39,13 @@
         creds = sessionStorage.getItem('creds');
         if (!creds) {
           creds = localStorage.getItem('creds');
-          if (creds) sessionStorage.setItem('creds', creds);
+          if (creds) {
+            sessionStorage.setItem('creds', creds);
+          }
         }
-        if (!creds) return false;
+        if (!creds) {
+          return false;
+        }
         _ref = creds.split(':'), username = _ref[0], key = _ref[1], secret = _ref[2];
         s3.auth(key, secret);
         return username;

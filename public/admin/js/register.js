@@ -33,7 +33,9 @@
         return $('#key').focus();
       });
       return $('#registerform').keyup(function(event) {
-        if (event.which === 27) return location.href = $('a.cancel').attr('href');
+        if (event.which === 27) {
+          return location.href = $('a.cancel').attr('href');
+        }
       });
     });
   });

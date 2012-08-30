@@ -1,0 +1,4 @@
+# images
+
+require ['app'], (app) ->
+	

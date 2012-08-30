@@ -13,14 +13,23 @@
       currentFiles: new File.Collection(),
       cache: JSON.parse(localStorage.getItem('appcache') || '{}'),
       load: function() {
-        return this.site.fetch().finished(function() {
-          if (!app.files.selected) {
-            site.files.trigger('change:selected', site.files);
-          }
-          return localStorage.setItem('appcache', JSON.stringify(app.cache));
+        var _this = this;
+        return require(['plugins/admin/main', 'plugins/codeable/main', 'plugins/images/main'], function() {
+          return _this.site.fetch().finished(function() {
+            if (!app.files.selected) {
+              site.files.trigger('change:selected', site.files);
+            }
+            return localStorage.setItem('appcache', JSON.stringify(app.cache));
+          });
         });
       },
-      registerType: function(page) {}
+      registerType: function(name, icon, matches) {
+        return File.Type.register(new File.Type({
+          name: name,
+          icon: icon,
+          matches: matches
+        }));
+      }
     };
     app.files.on('change:selected', function(files) {
       var parent;
