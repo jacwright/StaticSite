@@ -129,6 +129,24 @@ html, body {
 .menu-item {
 	position: relative;
 }
+.file-name {
+	white-space: nowrap;
+	padding: 0 16px;
+}
+.file-name .icon {
+	margin-left: -16px;
+}
+.file-name .actions {
+	position: absolute;
+	right: 10px;
+	top: 6px;
+}
+.file-name .name {
+	display: inline-block;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	width: 100%;
+}
 .file-name input {
 	font: inherit;
 	color: inherit;

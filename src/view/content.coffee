@@ -16,10 +16,9 @@ require ['app', 'view/displays'], (app, displays) ->
 		
 	app.currentFiles.on 'reset change:selected', ->
 		file = app.currentFiles.selected
-		
 		if file
 			ext = file.key.split('.').pop().toLowerCase()
-			if images[ext]
+			if file.type is 'image'
 				displays.setDisplays [
 					type: 'iframe'
 					label: 'Image'
@@ -34,6 +33,12 @@ require ['app', 'view/displays'], (app, displays) ->
 						</html>
 						"""
 					]
+			else if file.name is 'index.html' and file.parent.type is 'admin-folder'
+				displays.setDisplays [
+					type: 'iframe'
+					label: 'Admin'
+					content: ''
+				]
 			else if ext is 'html'
 				file.fetch().then ->
 					displays.setDisplays [

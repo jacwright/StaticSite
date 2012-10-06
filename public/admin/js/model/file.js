@@ -3,14 +3,9 @@
     __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
 
   define(['./model', './collection', 'lib/promises'], function(Model, Collection, promises) {
-    var File, FileCollection, FileType, childSort, escapeRegex, extention, fileName, getExtention, icons, onKeyChange;
+    var File, FileCollection, FileType, childSort, escapeRegex, extention, fileName, getExtention, onKeyChange;
     fileName = /([^\/]+)(\/)?$/;
     extention = /\.(\w+)$$/;
-    icons = {
-      js: 'script',
-      html: 'html',
-      css: 'css'
-    };
     getExtention = function(key) {
       var match;
       match = key.match(extention);
@@ -35,18 +30,12 @@
       }
     };
     onKeyChange = function(model, key) {
-      var ext, _ref;
+      var _ref;
       if (!key) {
         return;
       }
       model.name = key.match(fileName)[1];
-      model.url = ((_ref = model.site) != null ? _ref.url : void 0) + key;
-      ext = getExtention(key);
-      if (icons.hasOwnProperty(ext)) {
-        return model.icon = icons[ext];
-      } else {
-        return delete model.icon;
-      }
+      return model.url = ((_ref = model.site) != null ? _ref.url : void 0) + key;
     };
     FileType = (function(_super) {
 
@@ -94,7 +83,7 @@
     })(Model);
     FileType.register(new FileType({
       name: 'file',
-      icon: 'page',
+      icon: 'file',
       matches: function() {
         return true;
       }

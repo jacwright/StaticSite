@@ -3,10 +3,6 @@ define ['./model', './collection', 'lib/promises'], (Model, Collection, promises
 	
 	fileName = /([^\/]+)(\/)?$/
 	extention = /\.(\w+)$$/
-	icons =
-		js: 'script'
-		html: 'html'
-		css: 'css'
 	
 	getExtention = (key) ->
 		match = key.match extention
@@ -29,12 +25,6 @@ define ['./model', './collection', 'lib/promises'], (Model, Collection, promises
 		return unless key
 		model.name = key.match(fileName)[1]
 		model.url = model.site?.url + key
-		ext = getExtention(key)
-		if icons.hasOwnProperty(ext)
-			model.icon = icons[ext]
-		else
-			# default to the icon on prototype by deleting the one on this object
-			delete model.icon
 	
 	
 	
@@ -67,7 +57,7 @@ define ['./model', './collection', 'lib/promises'], (Model, Collection, promises
 	
 	
 	# default file type will match any
-	FileType.register new FileType(name: 'file', icon: 'page', matches: -> true)
+	FileType.register new FileType(name: 'file', icon: 'file', matches: -> true)
 	FileType.register new FileType(name: 'folder', icon: 'folder', matches: (attr) -> attr.key.slice(-1) is '/')
 	
 	

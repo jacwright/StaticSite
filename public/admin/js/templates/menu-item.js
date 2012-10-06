@@ -5,7 +5,7 @@ function menuItem(data,index) {
 
   name = "menu-item";
 
-  source = "<li data-id=\"<%= data.cid %>\" class=\"menu-item<%= if data.children.length then ' has-children' %><%= if app.currentFiles.selected is data then ' active' %>\">\n\t<h5 class=\"file-name\">\n\t\t<span class=\"icon <%= data.icon %>\"></span>\n\t\t<%= data.name %>\n\t\t<% unless data.nonStandard: %>\n\t\t<div class=\"actions pull-right dropdown\">\n\t\t\t<a class=\"dropdown-toggle\" data-toggle=\"dropdown\" href=\"#\">\n\t\t\t\t<span class=\"icon cog\"></span>\n\t\t\t</a>\n\t\t\t<ul class=\"dropdown-menu\">\n\t\t\t\t<li class=\"delete\">\n\t\t\t\t\t<a class=\"action\" href=\"#\">Delete</a>\n\t\t\t\t\t<span class=\"confirmation\">\n\t\t\t\t\t\t<strong>Delete?</strong> <span class=\"pull-right\"><a class=\"confirm\" href=\"#\">Yes</a> or <a class=\"cancel\" href=\"#\">Cancel</a></span>\n\t\t\t\t\t</span>\n\t\t\t\t</li>\n\t\t\t\t<li><a class=\"rename\" href=\"#\">Rename</a></li>\n\t\t\t</ul>\n\t\t</div>\n\t\t<% end %>\n\t</h5>\n\t<% if data.id.slice(-1) isnt '/' and data.lastModified: %><span class=\"date-modified\">Published: <%= data.lastModified.readable() %></span><% end %>\n</li>\n";
+  source = "<li data-id=\"<%= data.cid %>\" class=\"menu-item<%= if data.children.length then ' has-children' %><%= if app.currentFiles.selected is data then ' active' %>\">\n\t<h5 class=\"file-name\">\n\t\t<span class=\"icon <%= data.icon %>\"></span>\n\t\t<span class=\"name\"><%= data.name %></span>\n\t\t<% unless data.nonStandard: %>\n\t\t<div class=\"actions pull-right dropdown\">\n\t\t\t<a class=\"dropdown-toggle\" data-toggle=\"dropdown\" href=\"#\">\n\t\t\t\t<span class=\"icon cog\"></span>\n\t\t\t</a>\n\t\t\t<ul class=\"dropdown-menu\">\n\t\t\t\t<li class=\"delete\">\n\t\t\t\t\t<a class=\"action\" href=\"#\">Delete</a>\n\t\t\t\t\t<span class=\"confirmation\">\n\t\t\t\t\t\t<strong>Delete?</strong> <span class=\"pull-right\"><a class=\"confirm\" href=\"#\">Yes</a> or <a class=\"cancel\" href=\"#\">Cancel</a></span>\n\t\t\t\t\t</span>\n\t\t\t\t</li>\n\t\t\t\t<li><a class=\"rename\" href=\"#\">Rename</a></li>\n\t\t\t</ul>\n\t\t</div>\n\t\t<% end %>\n\t</h5>\n\t<% if data.id.slice(-1) isnt '/' and data.lastModified: %><span class=\"date-modified\">Published: <%= data.lastModified.readable() %></span><% end %>\n</li>\n";
 
   try {
     __line = 1;
@@ -23,9 +23,9 @@ function menuItem(data,index) {
     __lines.push(this.escape(data.icon));
     __lines.push('"></span>\n');
     __line = 4;
-    __lines.push('\t\t');
+    __lines.push('\t\t<span class="name">');
     __lines.push(this.escape(data.name));
-    __lines.push('\n');
+    __lines.push('</span>\n');
     __line = 5;
     __lines.push('\t\t');
     if (!data.nonStandard) {

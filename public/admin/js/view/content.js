@@ -20,12 +20,20 @@
       file = app.currentFiles.selected;
       if (file) {
         ext = file.key.split('.').pop().toLowerCase();
-        if (images[ext]) {
+        if (file.type === 'image') {
           return displays.setDisplays([
             {
               type: 'iframe',
               label: 'Image',
               content: "<html>\n<head>\n<style>body{text-align:center;margin:0;padding:20px;}img{max-width:100%;max-height:1000px;background-image:url(img/checker.png);-moz-box-shadow: 0px 3px 10px rgba(0, 0, 0, 0.5);-webkit-box-shadow: 0px 3px 10px rgba(0, 0, 0, 0.5);box-shadow: 0px 3px 10px rgba(0, 0, 0, 0.5);}</style>\n</head>\n<body>\n<img src=\"" + ('/' + file.site.name + '/' + file.key) + "\" alt=\"\">\n</body>\n</html>"
+            }
+          ]);
+        } else if (file.name === 'index.html' && file.parent.type === 'admin-folder') {
+          return displays.setDisplays([
+            {
+              type: 'iframe',
+              label: 'Admin',
+              content: ''
             }
           ]);
         } else if (ext === 'html') {
