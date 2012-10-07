@@ -33,7 +33,7 @@ require ['app', 'view/displays'], (app, displays) ->
 						</html>
 						"""
 					]
-			else if file.name is 'index.html' and file.parent.type is 'admin-folder'
+			else if file.name is 'index.html' and file.parent?.type is 'admin-folder'
 				displays.setDisplays [
 					type: 'iframe'
 					label: 'Admin'
