@@ -12,7 +12,7 @@ define ->
 					indentUnit: 4
 					indentWithTabs: true
 					lineNumbers: true
-					theme: 'intellij'
+					theme: 'default'
 				)
 				editor.getScrollerElement().style.height = '100%'
 				tabContent.data('editor', editor)
