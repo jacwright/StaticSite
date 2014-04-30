@@ -1,0 +1,15 @@
+{
+	"name": "staticsite-api",
+	"description": "The JavaScript API for an HTML5 CMS designed to be served and hosted from Amazon S3",
+	"version": "0.0.1",
+	"author": "Jacob Wright",
+	"engines": {
+		"node": ">= 0.4.5"
+	},
+	"dependencies": {
+		"brunch": "latest",
+    "javascript-brunch": "latest",
+    "coffee-script-brunch": "latest",
+    "uglify-js-brunch": "latest"
+	}
+}
